@@ -1,0 +1,25 @@
+{
+  "datetime_utc": "AUTO",
+  "timezone": "Europe/London",
+  "moon": {
+    "sign": "Cancer",
+    "degree": 18.2,
+    "nakshatra": "Pushya"
+  },
+  "saturn": {
+    "sign": "Pisces",
+    "degree": 12.1
+  },
+  "rahu": {
+    "sign": "Pisces",
+    "degree": 28.0
+  },
+  "ketu": {
+    "sign": "Virgo",
+    "degree": 28.0
+  },
+  "venus": {
+    "sign": "Sagittarius",
+    "degree": 5.4
+  }
+}
