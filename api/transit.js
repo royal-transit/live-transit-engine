@@ -1,14 +1,20 @@
-
 export default async function handler(req, res) {
   try {
-    res.status(200).json({
+
+    const output = {
       status: "Transit engine active",
-      source: "api/transit.js",
+      engine: "royal-live-transit",
       time: new Date().toISOString()
-    });
+    }
+
+    res.status(200).json(output)
+
   } catch (error) {
+
     res.status(500).json({
-      error: "Transit handler failed",
+      error: "Transit calculation failed",
       details: String(error)
-    });
+    })
+
   }
+}
