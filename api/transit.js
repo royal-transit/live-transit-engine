@@ -1,70 +1,38 @@
+import swe from "swisseph-v2"
+
 export default async function handler(req, res) {
   try {
+
     const now = new Date()
 
-    const transit = {
+    const jd =
+      swe.swe_julday(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1,
+        now.getUTCDate(),
+        now.getUTCHours() +
+          now.getUTCMinutes() / 60 +
+          now.getUTCSeconds() / 3600,
+        swe.SE_GREG_CAL
+      )
+
+    const moon = swe.swe_calc_ut(jd, swe.SE_MOON)
+
+    const moonDegree = moon.longitude
+
+    const result = {
       timestamp: now.toISOString(),
-
-      sun: {
-        sign: "Aquarius",
-        degree: 26.0,
-        nakshatra: "Purva Bhadrapada"
-      },
-
-      moon: {
-        sign: "Cancer",
-        degree: 18.2,
-        nakshatra: "Pushya"
-      },
-
-      mercury: {
-        sign: "Aquarius",
-        degree: 20.0,
-        nakshatra: "Shatabhisha"
-      },
-
-      venus: {
-        sign: "Sagittarius",
-        degree: 5.4,
-        nakshatra: "Mula"
-      },
-
-      mars: {
-        sign: "Gemini",
-        degree: 12.0,
-        nakshatra: "Ardra"
-      },
-
-      jupiter: {
-        sign: "Taurus",
-        degree: 17.0,
-        nakshatra: "Rohini"
-      },
-
-      saturn: {
-        sign: "Pisces",
-        degree: 12.1,
-        nakshatra: "Uttara Bhadrapada"
-      },
-
-      rahu: {
-        sign: "Pisces",
-        degree: 28.0,
-        nakshatra: "Revati"
-      },
-
-      ketu: {
-        sign: "Virgo",
-        degree: 28.0,
-        nakshatra: "Chitra"
-      }
+      moon_longitude: moonDegree
     }
 
-    res.status(200).json(transit)
+    res.status(200).json(result)
+
   } catch (error) {
+
     res.status(500).json({
-      error: "Transit engine failed",
+      error: "Swiss Ephemeris failed",
       details: String(error)
     })
+
   }
 }
