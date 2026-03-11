@@ -1,12 +1,11 @@
-
 import swe from "swisseph-v2"
 
-const SIGNS = [
+const SIGNS=[
 "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
 "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
 ]
 
-const NAKSHATRAS = [
+const NAKSHATRAS=[
 "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra",
 "Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni",
 "Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha",
@@ -14,100 +13,132 @@ const NAKSHATRAS = [
 "Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"
 ]
 
+const NAK_LORD=[
+"Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury",
+"Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury",
+"Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury"
+]
+
 function calcSign(longitude){
- const index = Math.floor(longitude / 30)
- return {
-  sign: SIGNS[index],
-  degree: longitude % 30
- }
+const i=Math.floor(longitude/30)
+return{sign:SIGNS[i],degree:longitude%30}
 }
 
-function calcNakshatra(longitude){
- const size = 13.3333333333
- const index = Math.floor(longitude / size)
- const pada = Math.floor((longitude % size) / 3.3333333333) + 1
- return {
-  nakshatra: NAKSHATRAS[index],
-  pada: pada
- }
+function calcNak(longitude){
+const size=13.3333333333
+const i=Math.floor(longitude/size)
+const pada=Math.floor((longitude%size)/3.3333333333)+1
+return{
+nakshatra:NAKSHATRAS[i],
+lord:NAK_LORD[i],
+pada:pada
+}
 }
 
-function planetData(longitude,speed){
+function planetData(long,lat,speed){
 
- const signData = calcSign(longitude)
- const nakData = calcNakshatra(longitude)
+const s=calcSign(long)
+const n=calcNak(long)
 
- return {
-  longitude,
-  sign: signData.sign,
-  degree: signData.degree,
-  nakshatra: nakData.nakshatra,
-  pada: nakData.pada,
-  retrograde: speed < 0,
-  speed: speed
- }
+return{
+longitude:long,
+latitude:lat,
+sign:s.sign,
+degree:s.degree,
+nakshatra:n.nakshatra,
+nakshatra_lord:n.lord,
+pada:n.pada,
+retrograde:speed<0,
+speed:speed
+}
+}
+
+function calcTithi(sun,moon){
+
+let diff=(moon-sun)%360
+if(diff<0)diff+=360
+
+const t=Math.floor(diff/12)+1
+
+return t
 }
 
 export default async function handler(req,res){
 
- try{
+try{
 
- const now = new Date()
+const now=new Date()
 
- swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI,0,0)
+swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI,0,0)
 
- const jd = swe.swe_julday(
-  now.getUTCFullYear(),
-  now.getUTCMonth()+1,
-  now.getUTCDate(),
-  now.getUTCHours()
-  + now.getUTCMinutes()/60
-  + now.getUTCSeconds()/3600,
-  swe.SE_GREG_CAL
- )
+const jd=swe.swe_julday(
+now.getUTCFullYear(),
+now.getUTCMonth()+1,
+now.getUTCDate(),
+now.getUTCHours()
++now.getUTCMinutes()/60
++now.getUTCSeconds()/3600,
+swe.SE_GREG_CAL
+)
 
- const flags = swe.SEFLG_SWIEPH | swe.SEFLG_SIDEREAL
+const flags=swe.SEFLG_SWIEPH|swe.SEFLG_SIDEREAL
 
- const sun = swe.swe_calc_ut(jd,swe.SE_SUN,flags)
- const moon = swe.swe_calc_ut(jd,swe.SE_MOON,flags)
- const mercury = swe.swe_calc_ut(jd,swe.SE_MERCURY,flags)
- const venus = swe.swe_calc_ut(jd,swe.SE_VENUS,flags)
- const mars = swe.swe_calc_ut(jd,swe.SE_MARS,flags)
- const jupiter = swe.swe_calc_ut(jd,swe.SE_JUPITER,flags)
- const saturn = swe.swe_calc_ut(jd,swe.SE_SATURN,flags)
- const rahu = swe.swe_calc_ut(jd,swe.SE_TRUE_NODE,flags)
+const sun=swe.swe_calc_ut(jd,swe.SE_SUN,flags)
+const moon=swe.swe_calc_ut(jd,swe.SE_MOON,flags)
+const mercury=swe.swe_calc_ut(jd,swe.SE_MERCURY,flags)
+const venus=swe.swe_calc_ut(jd,swe.SE_VENUS,flags)
+const mars=swe.swe_calc_ut(jd,swe.SE_MARS,flags)
+const jupiter=swe.swe_calc_ut(jd,swe.SE_JUPITER,flags)
+const saturn=swe.swe_calc_ut(jd,swe.SE_SATURN,flags)
+const rahu=swe.swe_calc_ut(jd,swe.SE_TRUE_NODE,flags)
 
- const ketuLongitude = (rahu.longitude + 180) % 360
+const ketuLong=(rahu.longitude+180)%360
 
- const result = {
+const tithi=calcTithi(sun.longitude,moon.longitude)
 
-  timestamp: now.toISOString(),
-  zodiac: "sidereal",
-  ayanamsa: "lahiri",
+const result={
 
-  sun: planetData(sun.longitude,sun.speed),
-  moon: planetData(moon.longitude,moon.speed),
-  mercury: planetData(mercury.longitude,mercury.speed),
-  venus: planetData(venus.longitude,venus.speed),
-  mars: planetData(mars.longitude,mars.speed),
-  jupiter: planetData(jupiter.longitude,jupiter.speed),
-  saturn: planetData(saturn.longitude,saturn.speed),
-  rahu: planetData(rahu.longitude,rahu.speed),
-  ketu: planetData(ketuLongitude,rahu.speed)
+timestamp:now.toISOString(),
 
- }
+zodiac:"sidereal",
+ayanamsa:"lahiri",
 
- res.status(200).json(result)
+panchanga:{
+tithi:tithi,
+vara:now.getUTCDay()
+},
 
- }
+sun:planetData(sun.longitude,sun.latitude,sun.speed),
 
- catch(error){
+moon:planetData(moon.longitude,moon.latitude,moon.speed),
 
- res.status(500).json({
-  error:"Transit engine failure",
-  details:String(error)
- })
+mercury:planetData(mercury.longitude,mercury.latitude,mercury.speed),
 
- }
+venus:planetData(venus.longitude,venus.latitude,venus.speed),
+
+mars:planetData(mars.longitude,mars.latitude,mars.speed),
+
+jupiter:planetData(jupiter.longitude,jupiter.latitude,jupiter.speed),
+
+saturn:planetData(saturn.longitude,saturn.latitude,saturn.speed),
+
+rahu:planetData(rahu.longitude,rahu.latitude,rahu.speed),
+
+ketu:planetData(ketuLong,rahu.latitude,rahu.speed)
+
+}
+
+res.status(200).json(result)
+
+}
+
+catch(err){
+
+res.status(500).json({
+error:"snapshot engine failure",
+details:String(err)
+})
+
+}
 
 }
