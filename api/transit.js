@@ -157,3 +157,18 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+xport default function handler(req, res) {
+  try {
+    const output = {
+      message: "Transit engine running"
+    };
+
+    res.status(200).json(output);
+
+  } catch (err) {
+    res.status(500).json({
+      error: "Transit calculation failed",
+      details: String(err)
+    });
+  }
+}
