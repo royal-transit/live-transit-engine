@@ -1,11 +1,11 @@
 import swe from "swisseph-v2"
 
-const SIGNS = [
+const SIGNS=[
 "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
 "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
 ]
 
-const DIGNITY = {
+const DIGNITY={
 Sun:{exalt:"Aries",debil:"Libra"},
 Moon:{exalt:"Taurus",debil:"Scorpio"},
 Mars:{exalt:"Capricorn",debil:"Cancer"},
@@ -26,20 +26,21 @@ const index=Math.floor(lon/30)
 return SIGNS[index]
 }
 
-function parseCalc(result){
-const lon =
-result.longitude ??
-result.lon ??
-result.xx?.[0]
+function parseResult(res){
 
-if(typeof lon !== "number")
-throw new Error("longitude error")
+if(!res) throw new Error("ephemeris error")
+
+const lon=res.longitude ?? res.lon ?? res.xx?.[0]
+
+if(typeof lon!=="number") throw new Error("longitude missing")
 
 return normalize360(lon)
 }
 
 function calcPlanet(jd,id,flags){
-return parseCalc(swe.swe_calc_ut(jd,id,flags))
+return parseResult(
+swe.swe_calc_ut(jd,id,flags)
+)
 }
 
 function dignityScore(planet,sign){
@@ -93,17 +94,15 @@ const sign=getSign(planets[p])
 
 strength[p]={
 longitude:planets[p],
-sign,
+sign:sign,
 dignity:dignityScore(p,sign)
 }
 
 }
 
 res.status(200).json({
-
 timestamp:now.toISOString(),
 strength
-
 })
 
 }catch(err){
@@ -115,3 +114,4 @@ details:String(err)
 
 }
 
+}
