@@ -1,38 +1,43 @@
-export default async function handler(req, res) {
+export default function handler(req, res) {
+
   try {
 
-    const { lat, lon } = req.query || {}
-
-    const latitude = lat ? Number(lat) : 51.5074
-    const longitude = lon ? Number(lon) : -0.1278
+    const lat = Number(req.query?.lat || 51.5074)
+    const lon = Number(req.query?.lon || -0.1278)
 
     return res.status(200).json({
+
       timestamp: new Date().toISOString(),
-      oracle_status: "active",
+
+      oracle_status: "online",
+
       location_used: {
-        latitude,
-        longitude
+        latitude: lat,
+        longitude: lon
       },
-      engine_routes: {
-        transit: /api/transit?lat=${latitude}&lon=${longitude},
-        chart: /api/chart?lat=${latitude}&lon=${longitude},
-        aspects: /api/aspects,
-        divisional: /api/divisional,
-        dasha: /api/dasha,
-        strength: /api/strength,
-        gochar: /api/gochar,
-        yog: /api/yog,
-        event: /api/event,
-        confidence: /api/confidence
-      }
+
+      available_engines: [
+        "/api/transit",
+        "/api/chart",
+        "/api/aspects",
+        "/api/divisional",
+        "/api/dasha",
+        "/api/strength",
+        "/api/gochar",
+        "/api/yog",
+        "/api/event",
+        "/api/confidence"
+      ]
+
     })
 
   } catch (err) {
 
     return res.status(500).json({
       error: "oracle engine crash",
-      details: String(err)
+      details: err.message
     })
 
   }
+
 }
