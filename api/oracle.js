@@ -3,51 +3,45 @@ export default async function handler(req,res){
 try{
 
 const host=req.headers.host
-const protocol="https"
+const base="https://"+host
 
-const lat=req.query.lat || "51.1465"
-const lon=req.query.lon || "0.8756"
-
-const base=${protocol}://${host}
-
-async function safeFetch(url){
-  try{
-    const r=await fetch(url)
-    return await r.json()
-  }catch(e){
-    return {error:"endpoint failed",url}
-  }
+const endpoints={
+transit:base+"/api/transit",
+chart:base+"/api/chart",
+aspects:base+"/api/aspects",
+divisional:base+"/api/divisional",
+dasha:base+"/api/dasha",
+strength:base+"/api/strength"
 }
 
-const transit=await safeFetch(${base}/api/transit?lat=${lat}&lon=${lon})
-const chart=await safeFetch(${base}/api/chart?lat=${lat}&lon=${lon})
-const aspects=await safeFetch(${base}/api/aspects)
-const divisional=await safeFetch(${base}/api/divisional)
-const dasha=await safeFetch(${base}/api/dasha)
-const strength=await safeFetch(${base}/api/strength)
+const result={}
+
+for(const key in endpoints){
+
+try{
+
+const r=await fetch(endpoints[key])
+result[key]=await r.json()
+
+}catch(e){
+
+result[key]={error:"failed",endpoint:endpoints[key]}
+
+}
+
+}
 
 res.status(200).json({
 
 timestamp:new Date().toISOString(),
-
-input:{
-latitude:Number(lat),
-longitude:Number(lon)
-},
-
-transit,
-chart,
-aspects,
-divisional,
-dasha,
-strength
+oracle:result
 
 })
 
 }catch(err){
 
 res.status(500).json({
-error:"oracle engine failure",
+error:"oracle crash",
 details:String(err)
 })
 
