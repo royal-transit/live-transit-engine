@@ -1,57 +1,40 @@
-export default async function handler(req, res) {
-
-  const base = process.env.VERCEL_URL
-    ? https://${process.env.VERCEL_URL}
-    : http://localhost:3000;
-
+export default function handler(req, res) {
   try {
+    const lat = req && req.query && req.query.lat ? Number(req.query.lat) : 51.5074
+    const lon = req && req.query && req.query.lon ? Number(req.query.lon) : -0.1278
 
-    const [
-      transit,
-      kp,
-      dasha,
-      divisional,
-      aspects,
-      strength,
-      yog,
-      gochar,
-      event,
-      confidence
-    ] = await Promise.all([
-      fetch(${base}/api/transit).then(r => r.json()),
-      fetch(${base}/api/kp).then(r => r.json()),
-      fetch(${base}/api/dasha).then(r => r.json()),
-      fetch(${base}/api/divisional).then(r => r.json()),
-      fetch(${base}/api/aspects).then(r => r.json()),
-      fetch(${base}/api/strength).then(r => r.json()),
-      fetch(${base}/api/yog).then(r => r.json()),
-      fetch(${base}/api/gochar).then(r => r.json()),
-      fetch(${base}/api/event).then(r => r.json()),
-      fetch(${base}/api/confidence).then(r => r.json())
-    ]);
-
-    res.status(200).json({
-      engine: "UHAP MASTER ORACLE",
-      timestamp: new Date(),
-
-      transit,
-      kp,
-      dasha,
-      divisional,
-      aspects,
-      strength,
-      yog,
-      gochar,
-      event,
-      confidence
-    });
-
+    return res.status(200).json({
+      timestamp: new Date().toISOString(),
+      oracle_status: "online",
+      location_used: {
+        latitude: lat,
+        longitude: lon
+      },
+      authority: {
+        engine_name: "ROYEL_ASTRO_ENGINE",
+        primary_calculation_authority: "Swiss Ephemeris",
+        zodiac: "sidereal",
+        ayanamsa: "lahiri"
+      },
+      available_engines: {
+        transit: `/api/transit?lat=${lat}&lon=${lon}`,
+        chart: `/api/chart?lat=${lat}&lon=${lon}`,
+        aspects: `/api/aspects`,
+        divisional: `/api/divisional`,
+        dasha: `/api/dasha`,
+        strength: `/api/strength`,
+        gochar: `/api/gochar`,
+        kp: `/api/kp?lat=${lat}&lon=${lon}`,
+        yog: `/api/yog`,
+        event: `/api/event`,
+        confidence: `/api/confidence`
+      },
+      note: "Use these live endpoints as the evidence sources for full analysis."
+    })
   } catch (err) {
-
-    res.status(500).json({
-      error: "oracle_engine_failed",
-      message: err.message
-    });
-
+    return res.status(500).json({
+      error: "oracle_engine_crash",
+      details: String(err)
+    })
   }
 }
