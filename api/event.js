@@ -5,38 +5,48 @@ export default async function handler(req,res){
     const lat=req.query.lat || "51.1465"
     const lon=req.query.lon || "0.8756"
 
-    async function getJson(url){
-      const r=await fetch(url)
-      return await r.json()
+    async function safeFetch(url){
+      try{
+        const r=await fetch(url)
+        const text=await r.text()
+        try{
+          return JSON.parse(text)
+        }catch{
+          return {error:"invalid_json",url,status:r.status}
+        }
+      }catch(e){
+        return {error:"fetch_failed",url}
+      }
     }
 
     const [transit,gochar,dasha,strength]=await Promise.all([
-      getJson(${base}/api/transit?lat=${lat}&lon=${lon}),
-      getJson(${base}/api/gochar),
-      getJson(${base}/api/dasha),
-      getJson(${base}/api/strength)
+      safeFetch(${base}/api/transit?lat=${lat}&lon=${lon}),
+      safeFetch(${base}/api/gochar),
+      safeFetch(${base}/api/dasha),
+      safeFetch(${base}/api/strength)
     ])
+
+    const impactCount=gochar?.gochar?.active_impacts?.length || 0
+    const maha=dasha?.current_mahadasha?.planet || ""
+    const strengthValues=strength?.strength ? Object.values(strength.strength) : []
+
+    const avgStrength=strengthValues.length
+      ? strengthValues.reduce((a,b)=>a+(Number(b.dignity)||0),0)/strengthValues.length
+      : 0
 
     let score=0
 
-    const impactCount=gochar?.gochar?.active_impacts?.length || 0
     if(impactCount>=5) score+=30
     else if(impactCount>=3) score+=20
     else if(impactCount>=1) score+=10
 
-    const maha=dasha?.current_mahadasha?.planet || ""
     if(maha) score+=20
-
-    const str=strength?.strength || {}
-    const avgStrength=Object.values(str).length
-      ? Object.values(str).reduce((a,b)=>a+(b.dignity||0),0)/Object.values(str).length
-      : 0
 
     if(avgStrength>=70) score+=25
     else if(avgStrength>=50) score+=15
     else score+=5
 
-    if(transit?.aspects?.length>=3) score+=15
+    if(Array.isArray(transit?.aspects) && transit.aspects.length>=3) score+=15
     if(transit?.ascendant) score+=10
 
     let tier="low"
@@ -49,8 +59,14 @@ export default async function handler(req,res){
         score,
         tier,
         impact_count:impactCount,
-        average_strength:avgStrength,
+        average_strength:Number(avgStrength.toFixed(2)),
         active_mahadasha:maha
+      },
+      dependencies:{
+        transit_ok:!transit?.error,
+        gochar_ok:!gochar?.error,
+        dasha_ok:!dasha?.error,
+        strength_ok:!strength?.error
       }
     })
   }catch(err){
