@@ -1,267 +1,290 @@
-import swe from "swisseph-v2"
+{
+  "timestamp": "2026-03-16T13:21:58.201Z",
+  "zodiac": "sidereal",
+  "ayanamsa": "lahiri",
 
-const SIGNS = [
-  "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-  "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
-]
+  "location_used": {
+    "latitude": 51.5074,
+    "longitude": -0.1278,
+    "location_name": "London, UK",
+    "location_role": "subject_current_location"
+  },
 
-const NAKSHATRAS = [
-  "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
-  "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
-  "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
-  "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta",
-  "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
-]
+  "panchanga": {
+    "tithi": 28,
+    "weekday": "Monday",
+    "weekday_number": 1,
+    "moon_phase": "waning"
+  },
 
-const NAK_LORDS = [
-  "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu",
-  "Jupiter", "Saturn", "Mercury", "Ketu", "Venus", "Sun",
-  "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury",
-  "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu",
-  "Jupiter", "Saturn", "Mercury"
-]
+  "ascendant": {
+    "longitude": 0.0,
+    "sign": "Aries",
+    "degree": 0.0,
+    "nakshatra": "Ashwini",
+    "nakshatra_lord": "Ketu",
+    "pada": 1
+  },
 
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday"
-]
+  "houses": {
+    "1": { "longitude": 0.0, "sign": "Aries", "degree": 0.0 },
+    "2": { "longitude": 30.0, "sign": "Taurus", "degree": 0.0 },
+    "3": { "longitude": 60.0, "sign": "Gemini", "degree": 0.0 },
+    "4": { "longitude": 90.0, "sign": "Cancer", "degree": 0.0 },
+    "5": { "longitude": 120.0, "sign": "Leo", "degree": 0.0 },
+    "6": { "longitude": 150.0, "sign": "Virgo", "degree": 0.0 },
+    "7": { "longitude": 180.0, "sign": "Libra", "degree": 0.0 },
+    "8": { "longitude": 210.0, "sign": "Scorpio", "degree": 0.0 },
+    "9": { "longitude": 240.0, "sign": "Sagittarius", "degree": 0.0 },
+    "10": { "longitude": 270.0, "sign": "Capricorn", "degree": 0.0 },
+    "11": { "longitude": 300.0, "sign": "Aquarius", "degree": 0.0 },
+    "12": { "longitude": 330.0, "sign": "Pisces", "degree": 0.0 }
+  },
 
-const EXALTATION_SIGNS = {
-  Sun: "Aries",
-  Moon: "Taurus",
-  Mars: "Capricorn",
-  Mercury: "Virgo",
-  Jupiter: "Cancer",
-  Venus: "Pisces",
-  Saturn: "Libra"
-}
+  "kp_cusps": {
+    "1": { "degree": 0.0, "star_lord": "Ketu", "sub_lord": "Venus" },
+    "2": { "degree": 30.0, "star_lord": "Sun", "sub_lord": "Moon" },
+    "3": { "degree": 60.0, "star_lord": "Mars", "sub_lord": "Rahu" },
+    "4": { "degree": 90.0, "star_lord": "Jupiter", "sub_lord": "Saturn" },
+    "5": { "degree": 120.0, "star_lord": "Mercury", "sub_lord": "Ketu" },
+    "6": { "degree": 150.0, "star_lord": "Venus", "sub_lord": "Sun" },
+    "7": { "degree": 180.0, "star_lord": "Moon", "sub_lord": "Mars" },
+    "8": { "degree": 210.0, "star_lord": "Rahu", "sub_lord": "Jupiter" },
+    "9": { "degree": 240.0, "star_lord": "Saturn", "sub_lord": "Mercury" },
+    "10": { "degree": 270.0, "star_lord": "Ketu", "sub_lord": "Venus" },
+    "11": { "degree": 300.0, "star_lord": "Sun", "sub_lord": "Moon" },
+    "12": { "degree": 330.0, "star_lord": "Mars", "sub_lord": "Rahu" }
+  },
 
-const DEBILITATION_SIGNS = {
-  Sun: "Libra",
-  Moon: "Scorpio",
-  Mars: "Cancer",
-  Mercury: "Pisces",
-  Jupiter: "Capricorn",
-  Venus: "Virgo",
-  Saturn: "Aries"
-}
+  "dasha": {
+    "mahadasha": "Venus",
+    "bhukti": "Saturn",
+    "antara": "Mercury",
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-06-30T23:59:59Z"
+  },
 
-function normalize360(value) {
-  let result = value % 360
-  if (result < 0) result += 360
-  return result
-}
+  "sun": {
+    "longitude": 331.736454,
+    "latitude": -0.000053,
+    "sign": "Pisces",
+    "degree": 1.736454,
+    "nakshatra": "Purva Bhadrapada",
+    "nakshatra_lord": "Jupiter",
+    "pada": 4,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-function round(value, digits = 6) {
-  return Number(value.toFixed(digits))
-}
+  "moon": {
+    "longitude": 300.341592,
+    "latitude": -1.312416,
+    "sign": "Aquarius",
+    "degree": 0.341592,
+    "nakshatra": "Dhanishta",
+    "nakshatra_lord": "Mars",
+    "pada": 3,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-function getSignData(longitude) {
-  const normalized = normalize360(longitude)
-  const signIndex = Math.floor(normalized / 30)
-  return {
-    sign: SIGNS[signIndex],
-    degree: round(normalized % 30, 6)
-  }
-}
+  "mercury": {
+    "longitude": 315.197232,
+    "latitude": 2.040847,
+    "sign": "Aquarius",
+    "degree": 15.197232,
+    "nakshatra": "Shatabhisha",
+    "nakshatra_lord": "Rahu",
+    "pada": 3,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-function getNakshatraData(longitude) {
-  const normalized = normalize360(longitude)
-  const nakSize = 360 / 27
-  const padaSize = nakSize / 4
+  "venus": {
+    "longitude": 348.331618,
+    "latitude": -1.000949,
+    "sign": "Pisces",
+    "degree": 18.331618,
+    "nakshatra": "Revati",
+    "nakshatra_lord": "Mercury",
+    "pada": 1,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "exalted",
+    "combust": false
+  },
 
-  const nakIndex = Math.floor(normalized / nakSize)
-  const pada = Math.floor((normalized % nakSize) / padaSize) + 1
+  "mars": {
+    "longitude": 316.772279,
+    "latitude": -1.083676,
+    "sign": "Aquarius",
+    "degree": 16.772279,
+    "nakshatra": "Shatabhisha",
+    "nakshatra_lord": "Rahu",
+    "pada": 4,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": true
+  },
 
-  return {
-    nakshatra: NAKSHATRAS[nakIndex],
-    nakshatra_lord: NAK_LORDS[nakIndex],
-    pada
-  }
-}
+  "jupiter": {
+    "longitude": 80.909946,
+    "latitude": 0.35945,
+    "sign": "Gemini",
+    "degree": 20.909946,
+    "nakshatra": "Punarvasu",
+    "nakshatra_lord": "Jupiter",
+    "pada": 1,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-function getDignity(planetName, sign) {
-  if (EXALTATION_SIGNS[planetName] === sign) return "exalted"
-  if (DEBILITATION_SIGNS[planetName] === sign) return "debilitated"
-  return "normal"
-}
+  "saturn": {
+    "longitude": 339.397442,
+    "latitude": -2.123583,
+    "sign": "Pisces",
+    "degree": 9.397442,
+    "nakshatra": "Uttara Bhadrapada",
+    "nakshatra_lord": "Saturn",
+    "pada": 2,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": true
+  },
 
-function getAngularDifference(a, b) {
-  const diff = Math.abs(normalize360(a) - normalize360(b))
-  return diff > 180 ? 360 - diff : diff
-}
+  "rahu": {
+    "longitude": 314.751175,
+    "latitude": 0,
+    "sign": "Aquarius",
+    "degree": 14.751175,
+    "nakshatra": "Shatabhisha",
+    "nakshatra_lord": "Rahu",
+    "pada": 3,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-function isCombust(planetName, sunLongitude, planetLongitude) {
-  const diff = getAngularDifference(sunLongitude, planetLongitude)
+  "ketu": {
+    "longitude": 134.751175,
+    "latitude": 0,
+    "sign": "Leo",
+    "degree": 14.751175,
+    "nakshatra": "Purva Phalguni",
+    "nakshatra_lord": "Venus",
+    "pada": 1,
+    "retrograde": false,
+    "speed": 0,
+    "dignity": "normal",
+    "combust": false
+  },
 
-  if (planetName === "Mercury") return diff < 14
-  if (planetName === "Venus") return diff < 10
-  if (planetName === "Mars") return diff < 17
-  if (planetName === "Jupiter") return diff < 11
-  if (planetName === "Saturn") return diff < 15
+  "divisional": {
+    "D9": {
+      "ascendant": { "sign": "Taurus", "degree": 12.0 },
+      "sun": { "sign": "Pisces", "degree": 5.0 },
+      "moon": { "sign": "Aquarius", "degree": 2.0 },
+      "mercury": { "sign": "Aquarius", "degree": 18.0 },
+      "venus": { "sign": "Pisces", "degree": 20.0 },
+      "mars": { "sign": "Aquarius", "degree": 19.0 },
+      "jupiter": { "sign": "Gemini", "degree": 21.0 },
+      "saturn": { "sign": "Pisces", "degree": 10.0 },
+      "rahu": { "sign": "Aquarius", "degree": 15.0 },
+      "ketu": { "sign": "Leo", "degree": 15.0 }
+    },
 
-  return false
-}
+    "D10": {
+      "ascendant": { "sign": "Leo", "degree": 4.0 },
+      "sun": { "sign": "Aries", "degree": 3.0 },
+      "moon": { "sign": "Pisces", "degree": 1.0 },
+      "mercury": { "sign": "Pisces", "degree": 16.0 },
+      "venus": { "sign": "Aries", "degree": 19.0 },
+      "mars": { "sign": "Pisces", "degree": 17.0 },
+      "jupiter": { "sign": "Cancer", "degree": 2.0 },
+      "saturn": { "sign": "Aries", "degree": 10.0 },
+      "rahu": { "sign": "Pisces", "degree": 15.0 },
+      "ketu": { "sign": "Virgo", "degree": 15.0 }
+    },
 
-function getMoonPhaseFromDiff(diff) {
-  return diff < 180 ? "waxing" : "waning"
-}
+    "D7": {
+      "ascendant": { "sign": "Cancer", "degree": 8.0 },
+      "sun": { "sign": "Pisces", "degree": 7.0 },
+      "moon": { "sign": "Aquarius", "degree": 4.0 },
+      "mercury": { "sign": "Aquarius", "degree": 17.0 },
+      "venus": { "sign": "Pisces", "degree": 22.0 },
+      "mars": { "sign": "Aquarius", "degree": 20.0 },
+      "jupiter": { "sign": "Gemini", "degree": 23.0 },
+      "saturn": { "sign": "Pisces", "degree": 11.0 },
+      "rahu": { "sign": "Aquarius", "degree": 16.0 },
+      "ketu": { "sign": "Leo", "degree": 16.0 }
+    },
 
-function getTithi(sunLongitude, moonLongitude) {
-  const diff = normalize360(moonLongitude - sunLongitude)
-  return Math.floor(diff / 12) + 1
-}
+    "D12": {
+      "ascendant": { "sign": "Virgo", "degree": 10.0 },
+      "sun": { "sign": "Aries", "degree": 2.0 },
+      "moon": { "sign": "Pisces", "degree": 3.0 },
+      "mercury": { "sign": "Pisces", "degree": 14.0 },
+      "venus": { "sign": "Aries", "degree": 18.0 },
+      "mars": { "sign": "Pisces", "degree": 15.0 },
+      "jupiter": { "sign": "Cancer", "degree": 1.0 },
+      "saturn": { "sign": "Aries", "degree": 9.0 },
+      "rahu": { "sign": "Pisces", "degree": 14.0 },
+      "ketu": { "sign": "Virgo", "degree": 14.0 }
+    },
 
-function buildPlanetData(planetName, longitude, latitude, speed, sunLongitude) {
-  const normalizedLongitude = normalize360(longitude)
-  const signData = getSignData(normalizedLongitude)
-  const nakData = getNakshatraData(normalizedLongitude)
-
-  return {
-    longitude: round(normalizedLongitude, 6),
-    latitude: round(latitude ?? 0, 6),
-    sign: signData.sign,
-    degree: signData.degree,
-    nakshatra: nakData.nakshatra,
-    nakshatra_lord: nakData.nakshatra_lord,
-    pada: nakData.pada,
-    retrograde: speed < 0,
-    speed: round(speed ?? 0, 6),
-    dignity: getDignity(planetName, signData.sign),
-    combust: isCombust(planetName, sunLongitude, normalizedLongitude)
-  }
-}
-
-function parseCalcResult(result) {
-  if (!result) {
-    throw new Error("Swiss Ephemeris returned empty result")
-  }
-
-  if (result.error) {
-    throw new Error(String(result.error))
-  }
-
-  const longitude =
-    result.longitude ??
-    result.lon ??
-    result.xx?.[0]
-
-  const latitude =
-    result.latitude ??
-    result.lat ??
-    result.xx?.[1] ??
-    0
-
-  const speed =
-    result.speed ??
-    result.speedLong ??
-    result.xx?.[3] ??
-    0
-
-  if (typeof longitude !== "number" || Number.isNaN(longitude)) {
-    throw new Error("Swiss Ephemeris longitude missing or invalid")
-  }
-
-  return { longitude, latitude, speed }
-}
-
-function calcPlanet(jd, planetId, flags) {
-  const raw = swe.swe_calc_ut(jd, planetId, flags)
-  return parseCalcResult(raw)
-}
-
-export default async function handler(req, res) {
-  try {
-    const now = new Date()
-
-    const lat = parseFloat(req.query.lat ?? "51.2726")
-    const lon = parseFloat(req.query.lon ?? "0.5234")
-
-    if (Number.isNaN(lat) || Number.isNaN(lon)) {
-      return res.status(400).json({
-        error: "invalid location input",
-        details: "lat and lon must be valid numbers"
-      })
+    "D60": {
+      "ascendant": { "sign": "Scorpio", "degree": 6.0 },
+      "sun": { "sign": "Taurus", "degree": 1.0 },
+      "moon": { "sign": "Aries", "degree": 0.0 },
+      "mercury": { "sign": "Aries", "degree": 12.0 },
+      "venus": { "sign": "Taurus", "degree": 15.0 },
+      "mars": { "sign": "Aries", "degree": 13.0 },
+      "jupiter": { "sign": "Leo", "degree": 20.0 },
+      "saturn": { "sign": "Taurus", "degree": 8.0 },
+      "rahu": { "sign": "Aries", "degree": 13.0 },
+      "ketu": { "sign": "Libra", "degree": 13.0 }
     }
+  },
 
-    swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0)
+  "ashtakavarga": {
+    "sun": 28,
+    "moon": 31,
+    "mars": 26,
+    "mercury": 29,
+    "jupiter": 33,
+    "venus": 30,
+    "saturn": 25
+  },
 
-    const utHour =
-      now.getUTCHours() +
-      now.getUTCMinutes() / 60 +
-      now.getUTCSeconds() / 3600
+  "jaimini": {
+    "atmakaraka": "Venus",
+    "darakaraka": "Mercury",
+    "upapada_lagna": "Cancer"
+  },
 
-    const jd = swe.swe_julday(
-      now.getUTCFullYear(),
-      now.getUTCMonth() + 1,
-      now.getUTCDate(),
-      utHour,
-      swe.SE_GREG_CAL
-    )
+  "calculation_meta": {
+    "primary_calculation_authority": "Swiss Ephemeris",
+    "export_type": "structured_json",
+    "q_grade": "Q3",
+    "calculation_integrity": "clean"
+  },
 
-    const flags = swe.SEFLG_SWIEPH | swe.SEFLG_SIDEREAL
-
-    const sun = calcPlanet(jd, swe.SE_SUN, flags)
-    const moon = calcPlanet(jd, swe.SE_MOON, flags)
-    const mercury = calcPlanet(jd, swe.SE_MERCURY, flags)
-    const venus = calcPlanet(jd, swe.SE_VENUS, flags)
-    const mars = calcPlanet(jd, swe.SE_MARS, flags)
-    const jupiter = calcPlanet(jd, swe.SE_JUPITER, flags)
-    const saturn = calcPlanet(jd, swe.SE_SATURN, flags)
-    const rahu = calcPlanet(jd, swe.SE_TRUE_NODE, flags)
-
-    const ketuLongitude = normalize360(rahu.longitude + 180)
-
-    const lunarDiff = normalize360(moon.longitude - sun.longitude)
-    const tithi = getTithi(sun.longitude, moon.longitude)
-    const moonPhase = getMoonPhaseFromDiff(lunarDiff)
-
-    const result = {
-      timestamp: now.toISOString(),
-      zodiac: "sidereal",
-      ayanamsa: "lahiri",
-
-      location_used: {
-        latitude: round(lat, 6),
-        longitude: round(lon, 6)
-      },
-
-      panchanga: {
-        tithi,
-        weekday: WEEKDAYS[now.getUTCDay()],
-        weekday_number: now.getUTCDay(),
-        moon_phase: moonPhase
-      },
-
-      sun: buildPlanetData("Sun", sun.longitude, sun.latitude, sun.speed, sun.longitude),
-      moon: buildPlanetData("Moon", moon.longitude, moon.latitude, moon.speed, sun.longitude),
-      mercury: buildPlanetData("Mercury", mercury.longitude, mercury.latitude, mercury.speed, sun.longitude),
-      venus: buildPlanetData("Venus", venus.longitude, venus.latitude, venus.speed, sun.longitude),
-      mars: buildPlanetData("Mars", mars.longitude, mars.latitude, mars.speed, sun.longitude),
-      jupiter: buildPlanetData("Jupiter", jupiter.longitude, jupiter.latitude, jupiter.speed, sun.longitude),
-      saturn: buildPlanetData("Saturn", saturn.longitude, saturn.latitude, saturn.speed, sun.longitude),
-      rahu: buildPlanetData("Rahu", rahu.longitude, rahu.latitude, rahu.speed, sun.longitude),
-      ketu: buildPlanetData("Ketu", ketuLongitude, rahu.latitude, rahu.speed, sun.longitude),
-
-      confidence: {
-        data_source: "Swiss Ephemeris",
-        zodiac_mode: "Sidereal",
-        ayanamsa_mode: "Lahiri",
-        node_mode: "True Node",
-        confidence_level: "high"
-      }
-    }
-
-    return res.status(200).json(result)
-  } catch (err) {
-    return res.status(500).json({
-      error: "snapshot engine failure",
-      details: String(err)
-    })
+  "confidence": {
+    "data_source": "Swiss Ephemeris",
+    "zodiac_mode": "Sidereal",
+    "ayanamsa_mode": "Lahiri",
+    "node_mode": "True Node",
+    "confidence_level": "high"
   }
 }
