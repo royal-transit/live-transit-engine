@@ -27,9 +27,7 @@ export default async function handler(req,res){
       dasha,
       strength,
       gochar,
-      yog,
-      event,
-      confidence
+      yog
     ]=await Promise.all([
       safeFetch(${base}/api/transit?lat=${lat}&lon=${lon}),
       safeFetch(${base}/api/chart?lat=${lat}&lon=${lon}),
@@ -38,9 +36,7 @@ export default async function handler(req,res){
       safeFetch(${base}/api/dasha),
       safeFetch(${base}/api/strength),
       safeFetch(${base}/api/gochar),
-      safeFetch(${base}/api/yog),
-      safeFetch(${base}/api/event?lat=${lat}&lon=${lon}),
-      safeFetch(${base}/api/confidence?lat=${lat}&lon=${lon})
+      safeFetch(${base}/api/yog)
     ])
 
     return res.status(200).json({
@@ -58,8 +54,12 @@ export default async function handler(req,res){
         strength,
         gochar,
         yog,
-        event,
-        confidence
+        event:{
+          status:"disabled_for_stability"
+        },
+        confidence:{
+          status:"disabled_for_stability"
+        }
       }
     })
   }catch(err){
