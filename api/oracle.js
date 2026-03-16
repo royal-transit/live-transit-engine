@@ -1,66 +1,56 @@
 export default async function handler(req,res){
+
+try{
+
+const host=req.headers.host
+const protocol="https"
+
+const lat=req.query.lat || "51.1465"
+const lon=req.query.lon || "0.8756"
+
+const base=${protocol}://${host}
+
+async function safeFetch(url){
   try{
-    const baseUrl = ${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}
-
-    const lat = req.query.lat ?? "51.5074"
-    const lon = req.query.lon ?? "-0.1278"
-
-    const transitUrl = ${baseUrl}/api/transit?lat=${lat}&lon=${lon}
-    const chartUrl = ${baseUrl}/api/chart?lat=${lat}&lon=${lon}
-    const aspectsUrl = ${baseUrl}/api/aspects
-    const divisionalUrl = ${baseUrl}/api/divisional
-    const dashaUrl = ${baseUrl}/api/dasha
-    const strengthUrl = ${baseUrl}/api/strength
-
-    const [
-      transitRes,
-      chartRes,
-      aspectsRes,
-      divisionalRes,
-      dashaRes,
-      strengthRes
-    ] = await Promise.all([
-      fetch(transitUrl),
-      fetch(chartUrl),
-      fetch(aspectsUrl),
-      fetch(divisionalUrl),
-      fetch(dashaUrl),
-      fetch(strengthUrl)
-    ])
-
-    const [
-      transit,
-      chart,
-      aspects,
-      divisional,
-      dasha,
-      strength
-    ] = await Promise.all([
-      transitRes.json(),
-      chartRes.json(),
-      aspectsRes.json(),
-      divisionalRes.json(),
-      dashaRes.json(),
-      strengthRes.json()
-    ])
-
-    return res.status(200).json({
-      timestamp: new Date().toISOString(),
-      input: {
-        latitude: Number(lat),
-        longitude: Number(lon)
-      },
-      transit,
-      chart,
-      aspects,
-      divisional,
-      dasha,
-      strength
-    })
-  }catch(err){
-    return res.status(500).json({
-      error: "oracle engine failure",
-      details: String(err)
-    })
+    const r=await fetch(url)
+    return await r.json()
+  }catch(e){
+    return {error:"endpoint failed",url}
   }
+}
+
+const transit=await safeFetch(${base}/api/transit?lat=${lat}&lon=${lon})
+const chart=await safeFetch(${base}/api/chart?lat=${lat}&lon=${lon})
+const aspects=await safeFetch(${base}/api/aspects)
+const divisional=await safeFetch(${base}/api/divisional)
+const dasha=await safeFetch(${base}/api/dasha)
+const strength=await safeFetch(${base}/api/strength)
+
+res.status(200).json({
+
+timestamp:new Date().toISOString(),
+
+input:{
+latitude:Number(lat),
+longitude:Number(lon)
+},
+
+transit,
+chart,
+aspects,
+divisional,
+dasha,
+strength
+
+})
+
+}catch(err){
+
+res.status(500).json({
+error:"oracle engine failure",
+details:String(err)
+})
+
+}
+
 }
