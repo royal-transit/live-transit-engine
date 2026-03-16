@@ -1,43 +1,49 @@
-export default function handler(req, res) {
+export default async function handler(req, res) {
 
-  try {
+  const lat = req.query?.lat || 51.5074
+  const lon = req.query?.lon || -0.1278
 
-    const lat = Number(req.query?.lat || 51.5074)
-    const lon = Number(req.query?.lon || -0.1278)
+  const base = "https://live-transit-engine.vercel.app/api"
 
-    return res.status(200).json({
+  const transit = await fetch(${base}/transit?lat=${lat}&lon=${lon}).then(r=>r.json())
+  const chart = await fetch(${base}/chart?lat=${lat}&lon=${lon}).then(r=>r.json())
+  const aspects = await fetch(${base}/aspects).then(r=>r.json())
+  const divisional = await fetch(${base}/divisional).then(r=>r.json())
+  const dasha = await fetch(${base}/dasha).then(r=>r.json())
+  const strength = await fetch(${base}/strength).then(r=>r.json())
+  const gochar = await fetch(${base}/gochar).then(r=>r.json())
+  const kp = await fetch(${base}/kp).then(r=>r.json())
+  const yog = await fetch(${base}/yog).then(r=>r.json())
+  const event = await fetch(${base}/event).then(r=>r.json())
+  const confidence = await fetch(${base}/confidence).then(r=>r.json())
 
-      timestamp: new Date().toISOString(),
+  return res.status(200).json({
 
-      oracle_status: "online",
+    authority: "ROYEL_ASTRO_ENGINE",
 
-      location_used: {
-        latitude: lat,
-        longitude: lon
-      },
+    timestamp: new Date().toISOString(),
 
-      available_engines: [
-        "/api/transit",
-        "/api/chart",
-        "/api/aspects",
-        "/api/divisional",
-        "/api/dasha",
-        "/api/strength",
-        "/api/gochar",
-        "/api/yog",
-        "/api/event",
-        "/api/confidence"
-      ]
+    location: {
+      latitude: lat,
+      longitude: lon
+    },
 
-    })
+    evidence_packet: {
 
-  } catch (err) {
+      transit,
+      chart,
+      aspects,
+      divisional,
+      dasha,
+      strength,
+      gochar,
+      kp,
+      yog,
+      event,
+      confidence
 
-    return res.status(500).json({
-      error: "oracle engine crash",
-      details: err.message
-    })
+    }
 
-  }
+  })
 
 }
