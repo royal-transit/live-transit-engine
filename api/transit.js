@@ -1,24 +1,4 @@
-[2:46 pm, 16/03/2026] Royel: import swe from "swisseph-v2"
-
-const SIGNS = [
-  "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-  "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
-]
-
-const NAKSHATRAS = [
-  "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
-  "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
-  "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
-  "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta",
-  "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
-]
-
-const NAK_LORDS = [
-  "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu",
-  "Jupiter", "Saturn", "Mercury", "Ketu", "Venus", "Sun",
-  "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury",
-  "Ketu", "Venus", "Sun",…
-[2:57 pm, 16/03/2026] Royel: import swe from "swisseph-v2"
+import swe from "swisseph-v2"
 
 const SIGNS = [
   "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -157,21 +137,6 @@ function buildPlanetData(planetName, longitude, latitude, speed, sunLongitude) {
   }
 }
 
-function buildPointData(longitude) {
-  const normalizedLongitude = normalize360(longitude)
-  const signData = getSignData(normalizedLongitude)
-  const nakData = getNakshatraData(normalizedLongitude)
-
-  return {
-    longitude: round(normalizedLongitude, 6),
-    sign: signData.sign,
-    degree: signData.degree,
-    nakshatra: nakData.nakshatra,
-    nakshatra_lord: nakData.nakshatra_lord,
-    pada: nakData.pada
-  }
-}
-
 function parseCalcResult(result) {
   if (!result) {
     throw new Error("Swiss Ephemeris returned empty result")
@@ -210,76 +175,10 @@ function calcPlanet(jd, planetId, flags) {
   return parseCalcResult(raw)
 }
 
-function parseHouseResult(result) {
-  if (!result) {
-    throw new Error("Swiss Ephemeris house result empty")
-  }
-
-  if (result.error) {
-    throw new Error(String(result.error))
-  }
-
-  const cusps =
-    result.house ??
-    result.houses ??
-    result.cusps ??
-    result.cusp ??
-    result.houseCusps ??
-    result.xx ??
-    null
-
-  const ascmc =
-    result.ascmc ??
-    result.ascmc2 ??
-    result.points ??
-    null
-
-  if (!cusps || !ascmc) {
-    throw new Error("Swiss Ephemeris house data missing")
-  }
-
-  return { cusps, ascmc }
-}
-
-function calcAscendantAndHouses(jd, lat, lon) {
-  // Most Swiss Ephemeris JS wrappers use this signature:
-  // swe_houses_ex(jd_ut, flags, lat, lon, houseSystem)
-  const raw = swe.swe_houses_ex(jd, swe.SEFLG_SIDEREAL, lat, lon, "W")
-  const { cusps, ascmc } = parseHouseResult(raw)
-
-  const ascendantLongitude =
-    ascmc[0] ??
-    ascmc.ascendant ??
-    ascmc.asc ??
-    null
-
-  if (typeof ascendantLongitude !== "number" || Number.isNaN(ascendantLongitude)) {
-    throw new Error("Ascendant longitude missing")
-  }
-
-  const ascendant = buildPointData(ascendantLongitude)
-
-  const houses = {}
-  for (let i = 1; i <= 12; i++) {
-    const cuspValue =
-      cusps[i] ??
-      cusps[i - 1]
-
-    if (typeof cuspValue !== "number" || Number.isNaN(cuspValue)) {
-      throw new Error(House cusp ${i} missing)
-    }
-
-    houses[String(i)] = buildPointData(cuspValue)
-  }
-
-  return { ascendant, houses }
-}
-
 export default async function handler(req, res) {
   try {
     const now = new Date()
 
-    // Query-based location
     const lat = parseFloat(req.query.lat ?? "51.2726")
     const lon = parseFloat(req.query.lon ?? "0.5234")
 
@@ -322,8 +221,6 @@ export default async function handler(req, res) {
     const tithi = getTithi(sun.longitude, moon.longitude)
     const moonPhase = getMoonPhaseFromDiff(lunarDiff)
 
-    const { ascendant, houses } = calcAscendantAndHouses(jd, lat, lon)
-
     const result = {
       timestamp: now.toISOString(),
       zodiac: "sidereal",
@@ -340,9 +237,6 @@ export default async function handler(req, res) {
         weekday_number: now.getUTCDay(),
         moon_phase: moonPhase
       },
-
-      ascendant,
-      houses,
 
       sun: buildPlanetData("Sun", sun.longitude, sun.latitude, sun.speed, sun.longitude),
       moon: buildPlanetData("Moon", moon.longitude, moon.latitude, moon.speed, sun.longitude),
@@ -363,9 +257,9 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json(result)
+    return res.status(200).json(result)
   } catch (err) {
-    res.status(500).json({
+    return res.status(500).json({
       error: "snapshot engine failure",
       details: String(err)
     })
