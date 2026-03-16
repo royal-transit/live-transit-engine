@@ -132,13 +132,46 @@ function buildPlanetData(planetName, longitude, latitude, speed, sunLongitude) {
   }
 }
 
-function parseCalcResult(result) {
-  if (!result) throw new Error("Swiss Ephemeris returned empty result")
-  if (result.error) throw new Error(String(result.error))
+function buildPointData(longitude) {
+  const normalizedLongitude = normalize360(longitude)
+  const signData = getSignData(normalizedLongitude)
+  const nakData = getNakshatraData(normalizedLongitude)
 
-  const longitude = result.longitude ?? result.lon ?? result.xx?.[0]
-  const latitude = result.latitude ?? result.lat ?? result.xx?.[1] ?? 0
-  const speed = result.speed ?? result.speedLong ?? result.xx?.[3] ?? 0
+  return {
+    longitude: round(normalizedLongitude, 6),
+    sign: signData.sign,
+    degree: signData.degree,
+    nakshatra: nakData.nakshatra,
+    nakshatra_lord: nakData.nakshatra_lord,
+    pada: nakData.pada
+  }
+}
+
+function parseCalcResult(result) {
+  if (!result) {
+    throw new Error("Swiss Ephemeris returned empty result")
+  }
+
+  if (result.error) {
+    throw new Error(String(result.error))
+  }
+
+  const longitude =
+    result.longitude ??
+    result.lon ??
+    result.xx?.[0]
+
+  const latitude =
+    result.latitude ??
+    result.lat ??
+    result.xx?.[1] ??
+    0
+
+  const speed =
+    result.speed ??
+    result.speedLong ??
+    result.xx?.[3] ??
+    0
 
   if (typeof longitude !== "number" || Number.isNaN(longitude)) {
     throw new Error("Swiss Ephemeris longitude missing or invalid")
@@ -149,6 +182,49 @@ function parseCalcResult(result) {
 
 function calcPlanet(jd, planetId, flags) {
   return parseCalcResult(swe.swe_calc_ut(jd, planetId, flags))
+}
+
+function parseHouseResult(result) {
+  if (!result) throw new Error("Swiss Ephemeris houses returned empty")
+
+  const housesArray =
+    result.house ??
+    result.houses ??
+    result.xx
+
+  if (!housesArray || !housesArray[1]) {
+    throw new Error("houses array missing")
+  }
+
+  return housesArray
+}
+
+function getAspect(a, b) {
+  const diff = Math.abs(normalize360(a) - normalize360(b))
+  const orb = Math.min(diff, 360 - diff)
+
+  if (Math.abs(orb - 0) < 6) return "conjunction"
+  if (Math.abs(orb - 60) < 5) return "sextile"
+  if (Math.abs(orb - 90) < 6) return "square"
+  if (Math.abs(orb - 120) < 6) return "trine"
+  if (Math.abs(orb - 180) < 6) return "opposition"
+
+  return null
+}
+
+function getStrengthScore(planet) {
+  let score = 0.5
+
+  if (planet.dignity === "exalted") score = 0.9
+  if (planet.dignity === "debilitated") score = 0.2
+
+  if (planet.retrograde) score += 0.05
+  if (planet.combust) score -= 0.15
+
+  if (score > 1) score = 1
+  if (score < 0) score = 0
+
+  return round(score, 2)
 }
 
 export default async function handler(req, res) {
@@ -197,7 +273,7 @@ export default async function handler(req, res) {
     const tithi = getTithi(sun.longitude, moon.longitude)
     const moonPhase = getMoonPhaseFromDiff(lunarDiff)
 
-    return res.status(200).json({
+    const result = {
       timestamp: now.toISOString(),
       zodiac: "sidereal",
       ayanamsa: "lahiri",
@@ -222,8 +298,76 @@ export default async function handler(req, res) {
       jupiter: buildPlanetData("Jupiter", jupiter.longitude, jupiter.latitude, jupiter.speed, sun.longitude),
       saturn: buildPlanetData("Saturn", saturn.longitude, saturn.latitude, saturn.speed, sun.longitude),
       rahu: buildPlanetData("Rahu", rahu.longitude, rahu.latitude, rahu.speed, sun.longitude),
-      ketu: buildPlanetData("Ketu", ketuLongitude, rahu.latitude, rahu.speed, sun.longitude),
+      ketu: buildPlanetData("Ketu", ketuLongitude, rahu.latitude, rahu.speed, sun.longitude)
+    }
 
+    // 1) Transit Lagna + 2) House Cusps
+    const housesRaw = swe.swe_houses(
+      jd,
+      lat,
+      lon,
+      "P"
+    )
+
+    const housesArray = parseHouseResult(housesRaw)
+
+    const ascendantLongitude = normalize360(housesArray[1])
+    const ascendant = buildPointData(ascendantLongitude)
+
+    const houses = {}
+    for (let i = 1; i <= 12; i++) {
+      houses[String(i)] = buildPointData(housesArray[i])
+    }
+
+    // 3) Aspects Summary
+    const planetLongitudes = {
+      Sun: result.sun.longitude,
+      Moon: result.moon.longitude,
+      Mercury: result.mercury.longitude,
+      Venus: result.venus.longitude,
+      Mars: result.mars.longitude,
+      Jupiter: result.jupiter.longitude,
+      Saturn: result.saturn.longitude,
+      Rahu: result.rahu.longitude,
+      Ketu: result.ketu.longitude
+    }
+
+    const aspectKeys = Object.keys(planetLongitudes)
+    const aspects = []
+
+    for (let i = 0; i < aspectKeys.length; i++) {
+      for (let j = i + 1; j < aspectKeys.length; j++) {
+        const p1 = aspectKeys[i]
+        const p2 = aspectKeys[j]
+        const aspect = getAspect(planetLongitudes[p1], planetLongitudes[p2])
+
+        if (aspect) {
+          aspects.push({
+            planet1: p1,
+            planet2: p2,
+            type: aspect
+          })
+        }
+      }
+    }
+
+    // 4) Strength Score
+    const strength = {
+      Sun: getStrengthScore(result.sun),
+      Moon: getStrengthScore(result.moon),
+      Mercury: getStrengthScore(result.mercury),
+      Venus: getStrengthScore(result.venus),
+      Mars: getStrengthScore(result.mars),
+      Jupiter: getStrengthScore(result.jupiter),
+      Saturn: getStrengthScore(result.saturn)
+    }
+
+    return res.status(200).json({
+      ...result,
+      ascendant,
+      houses,
+      aspects,
+      strength,
       confidence: {
         data_source: "Swiss Ephemeris",
         zodiac_mode: "Sidereal",
