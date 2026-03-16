@@ -1,27 +1,22 @@
-export default async function handler(req, res) {
-
+export default function handler(req, res) {
   try {
+    const lat = req && req.query && req.query.lat ? Number(req.query.lat) : 51.5074
+    const lon = req && req.query && req.query.lon ? Number(req.query.lon) : -0.1278
 
-    const lat = req?.query?.lat ? Number(req.query.lat) : 51.5074
-    const lon = req?.query?.lon ? Number(req.query.lon) : -0.1278
-
-    const payload = {
+    return res.status(200).json({
       timestamp: new Date().toISOString(),
-
       oracle_status: "online",
-
       location_used: {
         latitude: lat,
         longitude: lon
       },
-
       authority: {
-        engine: "ROYEL_ASTRO_ENGINE",
+        engine_name: "ROYEL_ASTRO_ENGINE",
+        primary_calculation_authority: "Swiss Ephemeris",
         zodiac: "sidereal",
         ayanamsa: "lahiri"
       },
-
-      engines: {
+      available_engines: {
         transit: /api/transit?lat=${lat}&lon=${lon},
         chart: /api/chart?lat=${lat}&lon=${lon},
         aspects: /api/aspects,
@@ -33,19 +28,13 @@ export default async function handler(req, res) {
         yog: /api/yog,
         event: /api/event,
         confidence: /api/confidence
-      }
-
-    }
-
-    return res.status(200).json(payload)
-
-  } catch (error) {
-
-    return res.status(500).json({
-      error: "oracle_function_error",
-      message: error?.message || "unknown error"
+      },
+      note: "Core astrology engines are online. Use the listed endpoints as the evidence sources for full analysis."
     })
-
+  } catch (err) {
+    return res.status(500).json({
+      error: "oracle_engine_crash",
+      details: String(err)
+    })
   }
-
 }
