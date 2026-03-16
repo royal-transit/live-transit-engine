@@ -8,9 +8,14 @@ export default async function handler(req,res){
     async function safeFetch(url){
       try{
         const r=await fetch(url)
-        return await r.json()
+        const text=await r.text()
+        try{
+          return JSON.parse(text)
+        }catch{
+          return {error:"invalid_json",url,status:r.status}
+        }
       }catch(e){
-        return {error:"failed",endpoint:url}
+        return {error:"fetch_failed",url}
       }
     }
 
