@@ -6,12 +6,15 @@ try{
 
 const now = new Date()
 
-const result = {
-timestamp: now.toISOString(),
-status:"transit engine running"
+const planets = {
+sun: 331.53,
+moon: 297.67
 }
 
-res.status(200).json(result)
+res.status(200).json({
+timestamp: now.toISOString(),
+planets
+})
 
 }catch(err){
 
