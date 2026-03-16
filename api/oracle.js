@@ -1,7 +1,6 @@
 export default async function handler(req, res) {
   try {
-    const host = req.headers.host
-    const base = https://${host}
+    const base = "https://live-transit-engine.vercel.app"
     const lat = req.query.lat || "51.1465"
     const lon = req.query.lon || "0.8756"
 
