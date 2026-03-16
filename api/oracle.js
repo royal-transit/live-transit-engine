@@ -19,14 +19,17 @@ export default async function handler(req, res) {
       confidence: ${base}/confidence
     }
 
-    async function safeFetch(url){
-      try{
-        const r = await fetch(url)
-        return await r.json()
-      }catch{
-        return {}
-      }
+   async function safeFetch(url){
+  try{
+    const r = await fetch(url, { cache: "no-store" })
+    if(!r.ok){
+      return {}
     }
+    return await r.json()
+  }catch(e){
+    return {}
+  }
+}
 
     const [
       transit,
