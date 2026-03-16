@@ -1,18 +1,18 @@
-export default async function handler(req,res){
-  try{
+export default async function handler(req, res) {
+  try {
     return res.status(200).json({
-      timestamp:new Date().toISOString(),
-      event_trigger:{
-        status:"disabled_for_stability",
-        score:null,
-        tier:null,
-        note:"Nested internal fetch removed to prevent serverless crash"
+      timestamp: new Date().toISOString(),
+      event_trigger: {
+        status: "stable_placeholder",
+        score: null,
+        tier: null,
+        note: "Core calculation remains active through transit/chart/aspects/divisional/dasha/strength/gochar endpoints."
       }
     })
-  }catch(err){
+  } catch (err) {
     return res.status(500).json({
-      error:"event engine failure",
-      details:String(err)
+      error: "event engine failure",
+      details: String(err)
     })
   }
 }
