@@ -14,9 +14,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
-
       engine_name: "ROYEL_ASTRO_ENGINE",
-
       data: {
         aspects: aspects,
         strength: strength,
@@ -24,7 +22,6 @@ export default async function handler(req, res) {
         event: event,
         confidence: confidence
       },
-
       engine_status: "master_pipeline_active"
     });
 
