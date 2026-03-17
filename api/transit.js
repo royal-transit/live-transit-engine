@@ -227,6 +227,20 @@ function getStrengthScore(planet) {
   return round(score, 2)
 }
 
+function calculateWholeSignHouses(ascendantLongitude) {
+  const ascNormalized = normalize360(ascendantLongitude)
+  const ascSignIndex = Math.floor(ascNormalized / 30)
+  const houses = {}
+
+  for (let i = 1; i <= 12; i++) {
+    const signIndex = (ascSignIndex + (i - 1)) % 12
+    const signStart = signIndex * 30
+    houses[String(i)] = buildPointData(signStart)
+  }
+
+  return houses
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date()
@@ -301,7 +315,6 @@ export default async function handler(req, res) {
       ketu: buildPlanetData("Ketu", ketuLongitude, rahu.latitude, rahu.speed, sun.longitude)
     }
 
-    // 1) Transit Lagna + 2) House Cusps
     const housesRaw = swe.swe_houses(
       jd,
       lat,
@@ -310,16 +323,11 @@ export default async function handler(req, res) {
     )
 
     const housesArray = parseHouseResult(housesRaw)
-
     const ascendantLongitude = normalize360(housesArray[1])
     const ascendant = buildPointData(ascendantLongitude)
 
-    const houses = {}
-    for (let i = 1; i <= 12; i++) {
-      houses[String(i)] = buildPointData(housesArray[i])
-    }
+    const houses = calculateWholeSignHouses(ascendantLongitude)
 
-    // 3) Aspects Summary
     const planetLongitudes = {
       Sun: result.sun.longitude,
       Moon: result.moon.longitude,
@@ -351,7 +359,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4) Strength Score
     const strength = {
       Sun: getStrengthScore(result.sun),
       Moon: getStrengthScore(result.moon),
