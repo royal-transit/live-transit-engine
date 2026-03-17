@@ -23,26 +23,31 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
+
       authority: {
         engine_name: "ROYEL_ASTRO_ENGINE",
         primary_calculation_authority: "Swiss Ephemeris",
         zodiac: "sidereal",
         ayanamsa: "lahiri"
       },
+
       integrity: {
-        calculation_integrity: "single_source",
+        calculation_integrity: "hybrid_source",
         primary_source: "Swiss Ephemeris",
+        kp_source: "static_reference",
         ayanamsa: "Lahiri",
         zodiac: "sidereal",
         data_pipeline: "snapshot_based",
         integrity_status: "verified"
       },
+
       quality: {
         d_grade: "A",
         q_grade: "A",
         source_reliability: "high",
         timing_precision: "minute_level"
       },
+
       evidence_packet: {
         transit: transit,
         kp: kp,
@@ -55,6 +60,7 @@ export default async function handler(req, res) {
         confidence: confidence
       }
     });
+
   } catch (error) {
     return res.status(200).json({
       status: "oracle_error",
