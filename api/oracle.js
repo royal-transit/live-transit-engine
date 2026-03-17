@@ -1,50 +1,46 @@
-export default function handler(req, res) {
+export default async function handler(req, res) {
 
-  const lat = req.query.lat ? Number(req.query.lat) : 51.5074
-  const lon = req.query.lon ? Number(req.query.lon) : -0.1278
+  try {
 
-  return res.status(200).json({
+    const base = "https://live-transit-engine.vercel.app/api";
 
-    timestamp: new Date().toISOString(),
+    const transit = await fetch(base + "/transit").then(r => r.json()).catch(() => ({}));
+    const kp = await fetch(base + "/kp").then(r => r.json()).catch(() => ({}));
+    const dasha = await fetch(base + "/dasha").then(r => r.json()).catch(() => ({}));
+    const divisional = await fetch(base + "/divisional").then(r => r.json()).catch(() => ({}));
+    const aspects = await fetch(base + "/aspects").then(r => r.json()).catch(() => ({}));
+    const strength = await fetch(base + "/strength").then(r => r.json()).catch(() => ({}));
+    const gochar = await fetch(base + "/gochar").then(r => r.json()).catch(() => ({}));
+    const event = await fetch(base + "/event").then(r => r.json()).catch(() => ({}));
+    const confidence = await fetch(base + "/confidence").then(r => r.json()).catch(() => ({}));
 
-    oracle_status: "online",
+    return res.status(200).json({
+      timestamp: new Date().toISOString(),
+      authority: {
+        engine_name: "ROYEL_ASTRO_ENGINE",
+        primary_calculation_authority: "Swiss Ephemeris",
+        zodiac: "sidereal",
+        ayanamsa: "lahiri"
+      },
+      evidence_packet: {
+        transit,
+        kp,
+        dasha,
+        divisional,
+        aspects,
+        strength,
+        gochar,
+        event,
+        confidence
+      }
+    });
 
-    location_used: {
-      latitude: lat,
-      longitude: lon
-    },
+  } catch (error) {
 
-    authority: {
-      engine_name: "ROYEL_ASTRO_ENGINE",
-      primary_calculation_authority: "Swiss Ephemeris",
-      zodiac: "sidereal",
-      ayanamsa: "lahiri"
-    },
+    return res.status(200).json({
+      status: "oracle_error",
+      message: error.message
+    });
 
-    available_engines: {
-
-      transit: "/api/transit?lat=" + lat + "&lon=" + lon,
-
-      kp: "/api/kp?lat=" + lat + "&lon=" + lon,
-
-      dasha: "/api/dasha?lat=" + lat + "&lon=" + lon,
-
-      divisional: "/api/divisional?lat=" + lat + "&lon=" + lon,
-
-      aspects: "/api/aspects?lat=" + lat + "&lon=" + lon,
-
-      strength: "/api/strength?lat=" + lat + "&lon=" + lon,
-
-      gochar: "/api/gochar?lat=" + lat + "&lon=" + lon,
-
-      yog: "/api/yog?lat=" + lat + "&lon=" + lon,
-
-      event: "/api/event?lat=" + lat + "&lon=" + lon,
-
-      confidence: "/api/confidence"
-
-    }
-
-  })
-
+  }
 }
