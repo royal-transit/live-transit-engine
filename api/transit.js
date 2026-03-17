@@ -46,6 +46,13 @@ const DEBILITATION_SIGNS = {
   Saturn: "Aries"
 }
 
+const MICRO_ASPECT_TARGETS = [
+  { name: "conjunction", angle: 0 },
+  { name: "square", angle: 90 },
+  { name: "trine", angle: 120 },
+  { name: "opposition", angle: 180 }
+]
+
 function normalize360(value) {
   let result = value % 360
   if (result < 0) result += 360
@@ -241,6 +248,64 @@ function calculateWholeSignHouses(ascendantLongitude) {
   return houses
 }
 
+function getTargetDistance(diff, target) {
+  return Math.abs(diff - target)
+}
+
+function buildIsoFromOffset(baseDate, offsetSeconds) {
+  return new Date(baseDate.getTime() + offsetSeconds * 1000).toISOString()
+}
+
+function scanMicroTriggers(baseDate, jd, flags) {
+  const triggers = []
+  const pairs = [
+    { planet1: "Moon", planet2: "Mercury", id1: swe.SE_MOON, id2: swe.SE_MERCURY },
+    { planet1: "Moon", planet2: "Mars", id1: swe.SE_MOON, id2: swe.SE_MARS },
+    { planet1: "Moon", planet2: "Rahu", id1: swe.SE_MOON, id2: swe.SE_TRUE_NODE },
+    { planet1: "Mercury", planet2: "Mars", id1: swe.SE_MERCURY, id2: swe.SE_MARS },
+    { planet1: "Mercury", planet2: "Rahu", id1: swe.SE_MERCURY, id2: swe.SE_TRUE_NODE },
+    { planet1: "Mars", planet2: "Rahu", id1: swe.SE_MARS, id2: swe.SE_TRUE_NODE },
+    { planet1: "Venus", planet2: "Jupiter", id1: swe.SE_VENUS, id2: swe.SE_JUPITER },
+    { planet1: "Sun", planet2: "Saturn", id1: swe.SE_SUN, id2: swe.SE_SATURN }
+  ]
+
+  for (const pair of pairs) {
+    for (const target of MICRO_ASPECT_TARGETS) {
+      let best = null
+
+      for (let offset = -300; offset <= 300; offset += 1) {
+        const jdStep = jd + offset / 86400
+        const p1 = calcPlanet(jdStep, pair.id1, flags)
+        const p2 = calcPlanet(jdStep, pair.id2, flags)
+        const diff = getAngularDifference(p1.longitude, p2.longitude)
+        const distance = getTargetDistance(diff, target.angle)
+
+        if (!best || distance < best.distance) {
+          best = {
+            distance,
+            offset,
+            exact_angle: round(diff, 6)
+          }
+        }
+      }
+
+      if (best && best.distance <= 0.05) {
+        triggers.push({
+          planet1: pair.planet1,
+          planet2: pair.planet2,
+          aspect: target.name,
+          exact_angle: best.exact_angle,
+          exactness_gap: round(best.distance, 6),
+          exact_time_utc: buildIsoFromOffset(baseDate, best.offset),
+          second_offset_from_snapshot: best.offset
+        })
+      }
+    }
+  }
+
+  return triggers
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date()
@@ -369,12 +434,21 @@ export default async function handler(req, res) {
       Saturn: getStrengthScore(result.saturn)
     }
 
+    const microTriggers = scanMicroTriggers(now, jd, flags)
+
     return res.status(200).json({
       ...result,
       ascendant,
       houses,
       aspects,
       strength,
+      micro_window: {
+        scan_range_seconds: 300,
+        step_seconds: 1,
+        trigger_count: microTriggers.length,
+        precision_mode: "ultra_micro_scan"
+      },
+      micro_triggers: microTriggers,
       confidence: {
         data_source: "Swiss Ephemeris",
         zodiac_mode: "Sidereal",
