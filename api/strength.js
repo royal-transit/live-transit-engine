@@ -1,117 +1,53 @@
-import swe from "swisseph-v2"
+export default async function handler(req, res) {
 
-const SIGNS=[
-"Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-"Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
-]
+  try {
 
-const DIGNITY={
-Sun:{exalt:"Aries",debil:"Libra"},
-Moon:{exalt:"Taurus",debil:"Scorpio"},
-Mars:{exalt:"Capricorn",debil:"Cancer"},
-Mercury:{exalt:"Virgo",debil:"Pisces"},
-Jupiter:{exalt:"Cancer",debil:"Capricorn"},
-Venus:{exalt:"Pisces",debil:"Virgo"},
-Saturn:{exalt:"Libra",debil:"Aries"}
-}
+    const response = await fetch("https://live-transit-engine.vercel.app/api/transit");
+    const data = await response.json();
 
-function normalize360(v){
-let r=v%360
-if(r<0) r+=360
-return r
-}
+    const planets = {
+      sun: data.sun.degree,
+      moon: data.moon.degree,
+      mercury: data.mercury.degree,
+      venus: data.venus.degree,
+      mars: data.mars.degree,
+      jupiter: data.jupiter.degree,
+      saturn: data.saturn.degree
+    };
 
-function getSign(lon){
-const index=Math.floor(lon/30)
-return SIGNS[index]
-}
+    const strength = {};
 
-function parseResult(res){
+    for (const p in planets) {
+      const degree = planets[p];
 
-if(!res) throw new Error("ephemeris error")
+      let score = 50;
 
-const lon=res.longitude ?? res.lon ?? res.xx?.[0]
+      if (degree < 5 || degree > 25) {
+        score += 10;
+      }
 
-if(typeof lon!=="number") throw new Error("longitude missing")
+      if (degree > 10 && degree < 20) {
+        score += 20;
+      }
 
-return normalize360(lon)
-}
+      strength[p] = {
+        degree: degree,
+        strength_score: score
+      };
+    }
 
-function calcPlanet(jd,id,flags){
-return parseResult(
-swe.swe_calc_ut(jd,id,flags)
-)
-}
+    return res.status(200).json({
+      timestamp: new Date().toISOString(),
+      strength: strength,
+      engine_status: "strength_calculated"
+    });
 
-function dignityScore(planet,sign){
+  } catch (error) {
 
-if(!DIGNITY[planet]) return 50
+    return res.status(500).json({
+      error: "strength_engine_failed",
+      details: error.message
+    });
 
-if(DIGNITY[planet].exalt===sign) return 100
-if(DIGNITY[planet].debil===sign) return 20
-
-return 60
-}
-
-export default async function handler(req,res){
-
-try{
-
-const now=new Date()
-
-swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI,0,0)
-
-const utHour=
-now.getUTCHours()+
-now.getUTCMinutes()/60+
-now.getUTCSeconds()/3600
-
-const jd=swe.swe_julday(
-now.getUTCFullYear(),
-now.getUTCMonth()+1,
-now.getUTCDate(),
-utHour,
-swe.SE_GREG_CAL
-)
-
-const flags=swe.SEFLG_SWIEPH | swe.SEFLG_SIDEREAL
-
-const planets={
-Sun:calcPlanet(jd,swe.SE_SUN,flags),
-Moon:calcPlanet(jd,swe.SE_MOON,flags),
-Mercury:calcPlanet(jd,swe.SE_MERCURY,flags),
-Venus:calcPlanet(jd,swe.SE_VENUS,flags),
-Mars:calcPlanet(jd,swe.SE_MARS,flags),
-Jupiter:calcPlanet(jd,swe.SE_JUPITER,flags),
-Saturn:calcPlanet(jd,swe.SE_SATURN,flags)
-}
-
-let strength={}
-
-for(const p in planets){
-
-const sign=getSign(planets[p])
-
-strength[p]={
-longitude:planets[p],
-sign:sign,
-dignity:dignityScore(p,sign)
-}
-
-}
-
-res.status(200).json({
-timestamp:now.toISOString(),
-strength
-})
-
-}catch(err){
-
-res.status(500).json({
-error:"strength engine failure",
-details:String(err)
-})
-
-}
-
+  }
 }
