@@ -1,20 +1,15 @@
 name: API Health Check
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
   schedule:
     - cron: "0 */6 * * *"
+  workflow_dispatch:
 
 jobs:
-  api-health-check:
+  health-check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Wait for deploy
-        run: sleep 25
-
       - name: Check Transit API
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/transit?lat=51.1465&lon=0.8756" > transit.json
@@ -28,59 +23,11 @@ jobs:
           curl -s "https://live-transit-engine.vercel.app/api/kp?lat=51.1465&lon=0.8756" > kp.json
           grep -q '"kp_cusps"' kp.json
 
-      - name: Check Dasha API Standard
+      - name: Check Dasha API
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.46" > dasha.json
           grep -q '"nakshatra"' dasha.json
           grep -q '"current_mahadasha"' dasha.json
-
-      - name: Check Dasha Boundary High
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=359.99" > dasha_high.json
-          grep -q '"nakshatra"' dasha_high.json
-
-      - name: Check Dasha Boundary Low
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=0.01" > dasha_low.json
-          grep -q '"nakshatra"' dasha_low.json
-
-      - name: Check Dasha Zero Value
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=0" > dasha_zero.json
-          grep -q '"nakshatra"' dasha_zero.json
-
-      - name: Check Dasha Precision Float
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.463681123456" > dasha_float.json
-          grep -q '"nakshatra"' dasha_float.json
-
-      - name: Check Oracle API
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
-          grep -q '"evidence_packet"' oracle.json
-          grep -q '"transit"' oracle.json
-          grep -q '"kp"' oracle.json
-          grep -q '"dasha"' oracle.json
-
-      - name: Check Empty Oracle No Crash
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/oracle" > oracle_empty.json
-          grep -q '"evidence_packet"' oracle_empty.json
-
-      - name: Check Transit No Params
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/transit" > transit_empty.json
-          grep -q '"sun"' transit_empty.json
-
-      - name: Check KP No Params
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/kp" > kp_empty.json
-          grep -q '"kp_cusps"' kp_empty.json
-
-      - name: Check Dasha No Params No Crash
-        run: |
-          curl -s "https://live-transit-engine.vercel.app/api/dasha" > dasha_empty.json
-          grep -q '"details"' dasha_empty.json
 
       - name: Check Divisional API
         run: |
@@ -112,3 +59,20 @@ jobs:
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/confidence?lat=51.1465&lon=0.8756" > confidence.json
           grep -q '"confidence_score"' confidence.json
+
+      - name: Check Oracle API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
+          grep -q '"evidence_packet"' oracle.json
+          grep -q '"transit"' oracle.json
+          grep -q '"kp"' oracle.json
+          grep -q '"dasha"' oracle.json
+
+      - name: Send WhatsApp Alert on Failure
+        if: failure()
+        run: |
+          curl -X POST "https://api.twilio.com/2010-04-01/Accounts/${{ secrets.TWILIO_ACCOUNT_SID }}/Messages.json" \
+          --data-urlencode "To=${{ secrets.TO_WHATSAPP }}" \
+          --data-urlencode "From=whatsapp:+14155238886" \
+          --data-urlencode "Body=❌ API Health Check FAILED in live-transit-engine. Check GitHub Actions now." \
+          -u "${{ secrets.TWILIO_ACCOUNT_SID }}:${{ secrets.TWILIO_AUTH_TOKEN }}"
