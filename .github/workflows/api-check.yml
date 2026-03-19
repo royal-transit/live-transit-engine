@@ -1,0 +1,49 @@
+name: API Health Check
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  api-health-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wait for deploy
+        run: sleep 25
+
+      - name: Check Transit API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/transit?lat=51.1465&lon=0.8756" > transit.json
+          cat transit.json
+          grep -q '"sun"' transit.json
+          grep -q '"moon"' transit.json
+          grep -q '"ascendant"' transit.json
+
+      - name: Check KP API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/kp?lat=51.1465&lon=0.8756" > kp.json
+          cat kp.json
+          grep -q '"kp_cusps"' kp.json
+
+      - name: Check Dasha API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.46" > dasha.json
+          cat dasha.json
+          grep -q '"nakshatra"' dasha.json
+          grep -q '"current_mahadasha"' dasha.json
+
+      - name: Check Oracle API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
+          cat oracle.json
+          grep -q '"evidence_packet"' oracle.json
+          grep -q '"transit"' oracle.json
+          grep -q '"dasha"' oracle.json
+
+      - name: Check No Crash on Empty Oracle
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/oracle" > oracle_empty.json
+          cat oracle_empty.json
+          grep -q '"evidence_packet"' oracle_empty.json
