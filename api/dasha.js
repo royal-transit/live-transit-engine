@@ -3,36 +3,551 @@ module.exports = async function handler(req, res) {
     const input = req.method === "POST" ? (req.body || {}) : (req.query || {});
     const now = new Date();
 
-    const moonLongitude = Number(
+    const moonLongitudeRaw =
       input.moon_longitude ??
       input.moonLongitude ??
       input.natal_moon_longitude ??
-      input.natalMoonLongitude
-    );
+      input.natalMoonLongitude;
 
-    if (!Number.isFinite(moonLongitude)) {
+    const birthDatetimeRaw =
+      input.birth_datetime ??
+      input.birthDatetime ??
+      input.dob_time_iso ??
+      input.birth_iso ??
+      null;
+
+    const asOfRaw =
+      input.as_of ??
+      input.asOf ??
+      input.timestamp ??
+      now.toISOString();
+
+    if (moonLongitudeRaw === undefined || moonLongitudeRaw === null || moonLongitudeRaw === "") {
       return res.status(200).json({
         error: "dasha engine failure",
-        details: "moon_longitude required"
+        details: "moon_longitude is required"
       });
     }
 
-    // 🔒 minimal safe output (no heavy calc → no crash)
-    const nakIndex = Math.floor((moonLongitude % 360) / (360 / 27));
+    const moonLongitude = Number(moonLongitudeRaw);
+    if (!Number.isFinite(moonLongitude)) {
+      return res.status(200).json({
+        error: "dasha engine failure",
+        details: "moon_longitude must be a valid number"
+      });
+    }
 
-    return res.status(200).json({
-      status: "OK",
-      moon_longitude: moonLongitude,
-      nakshatra_index: nakIndex,
-      message: "dasha api alive (safe mode)"
+    const asOf = new Date(asOfRaw);
+    if (Number.isNaN(asOf.getTime())) {
+      return res.status(200).json({
+        error: "dasha engine failure",
+        details: "Invalid as_of / timestamp value"
+      });
+    }
+
+    const result = computeVimshottariDasha({
+      moonLongitude,
+      birthDatetimeRaw,
+      asOf
     });
 
+    return res.status(200).json({
+      timestamp: now.toISOString(),
+      moon_longitude: round(normalize360(moonLongitude), 6),
+      nakshatra: {
+        index: result.nakshatra.index,
+        name: result.nakshatra.name,
+        lord: result.nakshatra.lord
+      },
+      mode: result.mode,
+      birth_balance: result.birthBalance,
+      current_mahadasha: result.currentMahadasha,
+      current_antardasha: result.currentAntardasha,
+      ends: result.ends,
+      confidence: result.confidence
+    });
   } catch (err) {
-    console.error("DASHA FATAL:", err);
-
+    console.error("DASHA ERROR:", err);
     return res.status(200).json({
       error: "dasha engine failure",
-      details: err.message
+      details: err instanceof Error ? err.message : String(err)
     });
   }
 };
+
+/* -------------------------------------------------------------------------- */
+/*                                   CONSTANTS                                */
+/* -------------------------------------------------------------------------- */
+
+const NAKSHATRA_NAMES = [
+  "Ashwini",
+  "Bharani",
+  "Krittika",
+  "Rohini",
+  "Mrigashira",
+  "Ardra",
+  "Punarvasu",
+  "Pushya",
+  "Ashlesha",
+  "Magha",
+  "Purva Phalguni",
+  "Uttara Phalguni",
+  "Hasta",
+  "Chitra",
+  "Swati",
+  "Vishakha",
+  "Anuradha",
+  "Jyeshtha",
+  "Mula",
+  "Purva Ashadha",
+  "Uttara Ashadha",
+  "Shravana",
+  "Dhanishta",
+  "Shatabhisha",
+  "Purva Bhadrapada",
+  "Uttara Bhadrapada",
+  "Revati"
+];
+
+const DASHA_SEQUENCE = [
+  "Ketu",
+  "Venus",
+  "Sun",
+  "Moon",
+  "Mars",
+  "Rahu",
+  "Jupiter",
+  "Saturn",
+  "Mercury"
+];
+
+const VIMSHOTTARI_YEARS = {
+  ketu: 7,
+  venus: 20,
+  sun: 6,
+  moon: 10,
+  mars: 7,
+  rahu: 18,
+  jupiter: 16,
+  saturn: 19,
+  mercury: 17
+};
+
+const LORD_ALIASES = {
+  ketu: "ketu",
+  venus: "venus",
+  sun: "sun",
+  moon: "moon",
+  mars: "mars",
+  rahu: "rahu",
+  jupiter: "jupiter",
+  saturn: "saturn",
+  mercury: "mercury",
+  shani: "saturn",
+  guru: "jupiter",
+  budh: "mercury",
+  mangal: "mars",
+  chandra: "moon",
+  surya: "sun",
+  shukra: "venus"
+};
+
+const TOTAL_VIMSHOTTARI_YEARS = 120;
+const NAKSHATRA_SIZE = 360 / 27;
+const YEAR_MS = 365.2425 * 24 * 60 * 60 * 1000;
+
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
+
+function normalize360(value) {
+  let v = Number(value) % 360;
+  if (v < 0) v += 360;
+  return v;
+}
+
+function round(value, digits = 6) {
+  return Number(Number(value).toFixed(digits));
+}
+
+function normalizeLordKey(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return LORD_ALIASES[raw] || raw;
+}
+
+function properLordName(value) {
+  const key = normalizeLordKey(value);
+  const found = DASHA_SEQUENCE.find((x) => normalizeLordKey(x) === key);
+  return found || null;
+}
+
+function getLordYears(lord) {
+  const key = normalizeLordKey(lord);
+  const years = VIMSHOTTARI_YEARS[key];
+  return Number.isFinite(years) ? years : null;
+}
+
+function getNakshatraData(moonLongitude) {
+  const lon = normalize360(moonLongitude);
+  const index = Math.floor(lon / NAKSHATRA_SIZE);
+  const name = NAKSHATRA_NAMES[index];
+  const lord = DASHA_SEQUENCE[index % 9];
+  const offsetInNakshatra = lon - index * NAKSHATRA_SIZE;
+  const consumedFraction = offsetInNakshatra / NAKSHATRA_SIZE;
+  const remainingFraction = 1 - consumedFraction;
+
+  return {
+    index,
+    name,
+    lord,
+    consumedFraction,
+    remainingFraction
+  };
+}
+
+function addYears(date, years) {
+  return new Date(date.getTime() + years * YEAR_MS);
+}
+
+function getBirthBalance(moonLongitude) {
+  const nak = getNakshatraData(moonLongitude);
+  const totalYears = getLordYears(nak.lord);
+
+  if (!totalYears) {
+    return null;
+  }
+
+  const consumedYearsAtBirth = totalYears * nak.consumedFraction;
+  const remainingYearsAtBirth = totalYears * nak.remainingFraction;
+
+  return {
+    nakshatra: {
+      index: nak.index,
+      name: nak.name,
+      lord: nak.lord
+    },
+    startLord: nak.lord,
+    totalYears,
+    consumedYearsAtBirth: round(consumedYearsAtBirth, 6),
+    remainingYearsAtBirth: round(remainingYearsAtBirth, 6)
+  };
+}
+
+function getSequenceIndex(lord) {
+  const proper = properLordName(lord);
+  if (!proper) return -1;
+  return DASHA_SEQUENCE.indexOf(proper);
+}
+
+function computeAntardasha(mahaLord, mahaElapsedYears) {
+  const mahaYears = getLordYears(mahaLord);
+  if (!mahaYears) {
+    return {
+      planet: "UNKNOWN",
+      total_years: 0,
+      elapsed_years: 0,
+      remaining_years: 0
+    };
+  }
+
+  const sequence = DASHA_SEQUENCE.slice();
+  const startIndex = getSequenceIndex(mahaLord);
+  if (startIndex < 0) {
+    return {
+      planet: "UNKNOWN",
+      total_years: 0,
+      elapsed_years: 0,
+      remaining_years: 0
+    };
+  }
+
+  let elapsed = Number(mahaElapsedYears) || 0;
+
+  for (let i = 0; i < sequence.length; i++) {
+    const subLord = sequence[(startIndex + i) % sequence.length];
+    const subLordYears = getLordYears(subLord);
+    if (!subLordYears) continue;
+
+    const subYears = (mahaYears * subLordYears) / TOTAL_VIMSHOTTARI_YEARS;
+
+    if (elapsed <= subYears + 1e-12) {
+      return {
+        planet: subLord,
+        total_years: round(subYears, 6),
+        elapsed_years: round(Math.max(0, elapsed), 6),
+        remaining_years: round(Math.max(0, subYears - elapsed), 6)
+      };
+    }
+
+    elapsed -= subYears;
+  }
+
+  return {
+    planet: mahaLord,
+    total_years: 0,
+    elapsed_years: 0,
+    remaining_years: 0
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             MAIN DASHA CALCULATION                         */
+/* -------------------------------------------------------------------------- */
+
+function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
+  const birthBalance = getBirthBalance(moonLongitude);
+  const nak = getNakshatraData(moonLongitude);
+
+  // If mapping missing, still return safe response
+  if (!birthBalance) {
+    return {
+      nakshatra: {
+        index: nak.index,
+        name: nak.name,
+        lord: nak.lord
+      },
+      mode: "mapping_incomplete_fallback",
+      birthBalance: {
+        planet: nak.lord,
+        total_years: null,
+        consumed_years_at_birth: null,
+        remaining_years_at_birth: null
+      },
+      currentMahadasha: {
+        planet: nak.lord,
+        total_years: null,
+        elapsed_years: null,
+        remaining_years: null,
+        note: "Missing Vimshottari mapping for current lord"
+      },
+      currentAntardasha: {
+        planet: "UNKNOWN",
+        total_years: null,
+        elapsed_years: null,
+        remaining_years: null
+      },
+      ends: null,
+      confidence: {
+        level: "low",
+        reason: "vimshottari_mapping_missing"
+      }
+    };
+  }
+
+  // Safe fallback if no birth datetime
+  if (!birthDatetimeRaw) {
+    const fallbackEnds = addYears(asOf, birthBalance.remainingYearsAtBirth);
+    return {
+      nakshatra: birthBalance.nakshatra,
+      mode: "balance_only_fallback",
+      birthBalance: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+        remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+      },
+      currentMahadasha: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        elapsed_years: 0,
+        remaining_years: birthBalance.remainingYearsAtBirth,
+        note: "birth_datetime not supplied; safe balance-only fallback used"
+      },
+      currentAntardasha: computeAntardasha(birthBalance.startLord, 0),
+      ends: fallbackEnds.toISOString(),
+      confidence: {
+        level: "limited",
+        reason: "birth_datetime_missing_fallback_used"
+      }
+    };
+  }
+
+  const birthDatetime = new Date(birthDatetimeRaw);
+  if (Number.isNaN(birthDatetime.getTime())) {
+    return {
+      nakshatra: birthBalance.nakshatra,
+      mode: "invalid_birth_datetime_fallback",
+      birthBalance: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+        remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+      },
+      currentMahadasha: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        elapsed_years: 0,
+        remaining_years: birthBalance.remainingYearsAtBirth,
+        note: "invalid birth_datetime; fallback used"
+      },
+      currentAntardasha: computeAntardasha(birthBalance.startLord, 0),
+      ends: addYears(asOf, birthBalance.remainingYearsAtBirth).toISOString(),
+      confidence: {
+        level: "limited",
+        reason: "invalid_birth_datetime_fallback_used"
+      }
+    };
+  }
+
+  if (asOf.getTime() < birthDatetime.getTime()) {
+    return {
+      nakshatra: birthBalance.nakshatra,
+      mode: "invalid_time_order_fallback",
+      birthBalance: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+        remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+      },
+      currentMahadasha: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        elapsed_years: 0,
+        remaining_years: birthBalance.remainingYearsAtBirth,
+        note: "as_of earlier than birth_datetime; fallback used"
+      },
+      currentAntardasha: computeAntardasha(birthBalance.startLord, 0),
+      ends: addYears(asOf, birthBalance.remainingYearsAtBirth).toISOString(),
+      confidence: {
+        level: "limited",
+        reason: "invalid_time_order_fallback_used"
+      }
+    };
+  }
+
+  const elapsedYearsSinceBirth = (asOf.getTime() - birthDatetime.getTime()) / YEAR_MS;
+
+  let currentLord = birthBalance.startLord;
+  let currentLordYears = birthBalance.totalYears;
+  let remainingInCurrent = birthBalance.remainingYearsAtBirth;
+  let elapsedInsideCurrent = currentLordYears - remainingInCurrent;
+
+  const sequence = DASHA_SEQUENCE.slice();
+  let seqIndex = getSequenceIndex(currentLord);
+
+  if (seqIndex < 0) {
+    return {
+      nakshatra: birthBalance.nakshatra,
+      mode: "sequence_index_fallback",
+      birthBalance: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+        remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+      },
+      currentMahadasha: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        elapsed_years: 0,
+        remaining_years: birthBalance.remainingYearsAtBirth,
+        note: "sequence index missing; fallback used"
+      },
+      currentAntardasha: computeAntardasha(birthBalance.startLord, 0),
+      ends: addYears(asOf, birthBalance.remainingYearsAtBirth).toISOString(),
+      confidence: {
+        level: "limited",
+        reason: "sequence_index_missing_fallback"
+      }
+    };
+  }
+
+  let remainingElapsed = elapsedYearsSinceBirth;
+
+  // Still inside birth-starting mahadasha
+  if (remainingElapsed <= remainingInCurrent + 1e-12) {
+    const antardasha = computeAntardasha(currentLord, elapsedInsideCurrent + remainingElapsed);
+
+    return {
+      nakshatra: birthBalance.nakshatra,
+      mode: "full_natal",
+      birthBalance: {
+        planet: birthBalance.startLord,
+        total_years: birthBalance.totalYears,
+        consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+        remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+      },
+      currentMahadasha: {
+        planet: currentLord,
+        total_years: round(currentLordYears, 6),
+        elapsed_years: round(elapsedInsideCurrent + remainingElapsed, 6),
+        remaining_years: round(remainingInCurrent - remainingElapsed, 6)
+      },
+      currentAntardasha: antardasha,
+      ends: addYears(asOf, remainingInCurrent - remainingElapsed).toISOString(),
+      confidence: {
+        level: "high",
+        reason: "birth_datetime_and_natal_moon_used"
+      }
+    };
+  }
+
+  remainingElapsed -= remainingInCurrent;
+
+  // Move through full mahadashas
+  while (true) {
+    seqIndex = (seqIndex + 1) % sequence.length;
+    currentLord = sequence[seqIndex];
+    currentLordYears = getLordYears(currentLord);
+
+    if (!currentLordYears) {
+      return {
+        nakshatra: birthBalance.nakshatra,
+        mode: "current_lord_missing_fallback",
+        birthBalance: {
+          planet: birthBalance.startLord,
+          total_years: birthBalance.totalYears,
+          consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+          remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+        },
+        currentMahadasha: {
+          planet: currentLord,
+          total_years: null,
+          elapsed_years: null,
+          remaining_years: null,
+          note: "current lord years missing"
+        },
+        currentAntardasha: {
+          planet: "UNKNOWN",
+          total_years: null,
+          elapsed_years: null,
+          remaining_years: null
+        },
+        ends: null,
+        confidence: {
+          level: "low",
+          reason: "current_lord_years_missing"
+        }
+      };
+    }
+
+    if (remainingElapsed <= currentLordYears + 1e-12) {
+      const currentRemainingYears = currentLordYears - remainingElapsed;
+      const antardasha = computeAntardasha(currentLord, remainingElapsed);
+
+      return {
+        nakshatra: birthBalance.nakshatra,
+        mode: "full_natal",
+        birthBalance: {
+          planet: birthBalance.startLord,
+          total_years: birthBalance.totalYears,
+          consumed_years_at_birth: birthBalance.consumedYearsAtBirth,
+          remaining_years_at_birth: birthBalance.remainingYearsAtBirth
+        },
+        currentMahadasha: {
+          planet: currentLord,
+          total_years: round(currentLordYears, 6),
+          elapsed_years: round(remainingElapsed, 6),
+          remaining_years: round(currentRemainingYears, 6)
+        },
+        currentAntardasha: antardasha,
+        ends: addYears(asOf, currentRemainingYears).toISOString(),
+        confidence: {
+          level: "high",
+          reason: "birth_datetime_and_natal_moon_used"
+        }
+      };
+    }
+
+    remainingElapsed -= currentLordYears;
+  }
+}
