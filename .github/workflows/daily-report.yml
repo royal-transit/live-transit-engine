@@ -11,30 +11,37 @@ jobs:
 
     steps:
       - name: Check core APIs
-        id: check
         run: |
           transit="FAIL"
           dasha="FAIL"
           oracle="FAIL"
 
           curl -s "https://live-transit-engine.vercel.app/api/transit?lat=51.1465&lon=0.8756" > transit.json
-          grep -q '"sun"' transit.json && grep -q '"moon"' transit.json && transit="OK"
+          if grep -q '"sun"' transit.json && grep -q '"moon"' transit.json; then
+            transit="OK"
+          fi
 
           curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.46" > dasha.json
-          grep -q '"nakshatra"' dasha.json && grep -q '"current_mahadasha"' dasha.json && dasha="OK"
+          if grep -q '"nakshatra"' dasha.json && grep -q '"current_mahadasha"' dasha.json; then
+            dasha="OK"
+          fi
 
           curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
-          grep -q '"evidence_packet"' oracle.json && oracle="OK"
+          if grep -q '"evidence_packet"' oracle.json; then
+            oracle="OK"
+          fi
 
           status="OK"
           if [ "$transit" != "OK" ] || [ "$dasha" != "OK" ] || [ "$oracle" != "OK" ]; then
             status="ATTENTION NEEDED"
           fi
 
-          echo "STATUS=$status" >> $GITHUB_ENV
-          echo "TRANSIT=$transit" >> $GITHUB_ENV
-          echo "DASHA=$dasha" >> $GITHUB_ENV
-          echo "ORACLE=$oracle" >> $GITHUB_ENV
+          {
+            echo "STATUS=$status"
+            echo "TRANSIT=$transit"
+            echo "DASHA=$dasha"
+            echo "ORACLE=$oracle"
+          } >> "$GITHUB_ENV"
 
       - name: Send WhatsApp Daily Reminder
         run: |
