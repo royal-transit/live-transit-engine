@@ -1,0 +1,73 @@
+REGRESSION TEST BASE
+
+1. TRANSIT API
+- /api/transit?lat=51.1465&lon=0.8756
+Expected:
+status 200
+sun present
+moon present
+ascendant present
+houses present
+
+2. KP API
+- /api/kp?lat=51.1465&lon=0.8756
+Expected:
+status 200
+kp_cusps present
+
+3. DASHA API SATURN CASE
+- /api/dasha?moon_longitude=335.46
+Expected:
+status 200
+nakshatra = Uttara Bhadrapada
+lord = Saturn
+no crash
+no 500 error
+
+4. DIVISIONAL API
+- /api/divisional?lat=51.1465&lon=0.8756
+Expected:
+status 200
+D1 present
+D9 present
+D10 present
+
+5. ASPECTS API
+- /api/aspects?lat=51.1465&lon=0.8756
+Expected:
+status 200
+aspects array present
+
+6. STRENGTH API
+- /api/strength?lat=51.1465&lon=0.8756
+Expected:
+status 200
+strength object present
+
+7. GOCHAR API
+- /api/gochar?lat=51.1465&lon=0.8756
+Expected:
+status 200
+gochar object present
+
+8. EVENT API
+- /api/event?lat=51.1465&lon=0.8756
+Expected:
+status 200
+events present
+
+9. CONFIDENCE API
+- /api/confidence?lat=51.1465&lon=0.8756
+Expected:
+status 200
+confidence_score present
+
+10. ORACLE API
+- /api/oracle?lat=51.1465&lon=0.8756
+Expected:
+status 200
+evidence_packet present
+transit present
+kp present
+dasha present
+no dasha crash
