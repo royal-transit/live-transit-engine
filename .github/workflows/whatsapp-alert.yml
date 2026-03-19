@@ -1,0 +1,17 @@
+name: WhatsApp Alert
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send WhatsApp message
+        run: |
+          curl -X POST https://api.twilio.com/2010-04-01/Accounts/${{ secrets.TWILIO_ACCOUNT_SID }}/Messages.json \
+          --data-urlencode "To=${{ secrets.TO_WHATSAPP }}" \
+          --data-urlencode "From=whatsapp:+14155238886" \
+          --data-urlencode "Body=🚨 Royel System Alert: SUCCESS" \
+          -u "${{ secrets.TWILIO_ACCOUNT_SID }}:${{ secrets.TWILIO_AUTH_TOKEN }}"
