@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     const input = req.method === "POST" ? (req.body || {}) : (req.query || {});
 
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       details: err instanceof Error ? err.message : String(err)
     });
   }
-}
+};
 
 /* -------------------------------------------------------------------------- */
 /*                                   CONSTANTS                                */
@@ -281,7 +281,6 @@ function computeAntardasha(mahaLord, mahaElapsedYears) {
 function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
   const birthBalance = getBirthBalance(moonLongitude);
 
-  // Safe fallback mode if true birth datetime is not supplied
   if (!birthDatetimeRaw) {
     const fallbackEnds = addYears(asOf, birthBalance.remainingYearsAtBirth);
     return {
@@ -329,7 +328,6 @@ function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
   let seqIndex = getSequenceIndex(currentLord);
   let remainingElapsed = elapsedYearsSinceBirth;
 
-  // First mahadasha from birth balance
   if (remainingElapsed <= remainingInCurrent + 1e-12) {
     const antardasha = computeAntardasha(currentLord, elapsedInsideCurrent + remainingElapsed);
     return {
@@ -358,7 +356,6 @@ function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
 
   remainingElapsed -= remainingInCurrent;
 
-  // Move across full mahadashas
   while (true) {
     seqIndex = (seqIndex + 1) % sequence.length;
     currentLord = sequence[seqIndex];
