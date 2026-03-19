@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
 
 jobs:
   api-health-check:
@@ -19,24 +21,94 @@ jobs:
           grep -q '"sun"' transit.json
           grep -q '"moon"' transit.json
           grep -q '"ascendant"' transit.json
+          grep -q '"houses"' transit.json
 
       - name: Check KP API
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/kp?lat=51.1465&lon=0.8756" > kp.json
           grep -q '"kp_cusps"' kp.json
 
-      - name: Check Dasha API
+      - name: Check Dasha API Standard
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.46" > dasha.json
           grep -q '"nakshatra"' dasha.json
           grep -q '"current_mahadasha"' dasha.json
 
+      - name: Check Dasha Boundary High
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=359.99" > dasha_high.json
+          grep -q '"nakshatra"' dasha_high.json
+
+      - name: Check Dasha Boundary Low
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=0.01" > dasha_low.json
+          grep -q '"nakshatra"' dasha_low.json
+
+      - name: Check Dasha Zero Value
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=0" > dasha_zero.json
+          grep -q '"nakshatra"' dasha_zero.json
+
+      - name: Check Dasha Precision Float
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.463681123456" > dasha_float.json
+          grep -q '"nakshatra"' dasha_float.json
+
       - name: Check Oracle API
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
           grep -q '"evidence_packet"' oracle.json
+          grep -q '"transit"' oracle.json
+          grep -q '"kp"' oracle.json
+          grep -q '"dasha"' oracle.json
 
-      - name: Check Empty Oracle (No Crash)
+      - name: Check Empty Oracle No Crash
         run: |
           curl -s "https://live-transit-engine.vercel.app/api/oracle" > oracle_empty.json
           grep -q '"evidence_packet"' oracle_empty.json
+
+      - name: Check Transit No Params
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/transit" > transit_empty.json
+          grep -q '"sun"' transit_empty.json
+
+      - name: Check KP No Params
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/kp" > kp_empty.json
+          grep -q '"kp_cusps"' kp_empty.json
+
+      - name: Check Dasha No Params No Crash
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/dasha" > dasha_empty.json
+          grep -q '"details"' dasha_empty.json
+
+      - name: Check Divisional API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/divisional?lat=51.1465&lon=0.8756" > divisional.json
+          grep -q '"D1"' divisional.json
+          grep -q '"D9"' divisional.json
+
+      - name: Check Aspects API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/aspects?lat=51.1465&lon=0.8756" > aspects.json
+          grep -q '"aspects"' aspects.json
+
+      - name: Check Strength API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/strength?lat=51.1465&lon=0.8756" > strength.json
+          grep -q '"strength"' strength.json
+
+      - name: Check Gochar API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/gochar?lat=51.1465&lon=0.8756" > gochar.json
+          grep -q '"gochar"' gochar.json
+
+      - name: Check Event API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/event?lat=51.1465&lon=0.8756" > event.json
+          grep -q '"events"' event.json
+
+      - name: Check Confidence API
+        run: |
+          curl -s "https://live-transit-engine.vercel.app/api/confidence?lat=51.1465&lon=0.8756" > confidence.json
+          grep -q '"confidence_score"' confidence.json
