@@ -1,7 +1,6 @@
 module.exports = async function handler(req, res) {
   try {
     const input = req.method === "POST" ? (req.body || {}) : (req.query || {});
-
     const now = new Date();
 
     const moonLongitudeRaw =
@@ -24,7 +23,7 @@ module.exports = async function handler(req, res) {
       now.toISOString();
 
     if (moonLongitudeRaw === undefined || moonLongitudeRaw === null || moonLongitudeRaw === "") {
-      return res.status(400).json({
+      return res.status(200).json({
         error: "dasha engine failure",
         details: "moon_longitude is required"
       });
@@ -32,7 +31,7 @@ module.exports = async function handler(req, res) {
 
     const moonLongitude = Number(moonLongitudeRaw);
     if (!Number.isFinite(moonLongitude)) {
-      return res.status(400).json({
+      return res.status(200).json({
         error: "dasha engine failure",
         details: "moon_longitude must be a valid number"
       });
@@ -40,7 +39,7 @@ module.exports = async function handler(req, res) {
 
     const asOf = new Date(asOfRaw);
     if (Number.isNaN(asOf.getTime())) {
-      return res.status(400).json({
+      return res.status(200).json({
         error: "dasha engine failure",
         details: "Invalid as_of / timestamp value"
       });
@@ -68,7 +67,9 @@ module.exports = async function handler(req, res) {
       confidence: result.confidence
     });
   } catch (err) {
-    return res.status(500).json({
+    console.error("DASHA ERROR:", err);
+
+    return res.status(200).json({
       error: "dasha engine failure",
       details: err instanceof Error ? err.message : String(err)
     });
@@ -179,7 +180,7 @@ function properLordName(value) {
   const key = normalizeLordKey(value);
   const found = DASHA_SEQUENCE.find((x) => normalizeLordKey(x) === key);
   if (!found) {
-    throw new Error(Missing Vimshottari mapping for lord: ${String(value)});
+    return null;
   }
   return found;
 }
@@ -188,7 +189,7 @@ function getLordYears(lord) {
   const key = normalizeLordKey(lord);
   const years = VIMSHOTTARI_YEARS[key];
   if (!Number.isFinite(years)) {
-    throw new Error(Missing Vimshottari years mapping for lord: ${String(lord)});
+    return 0;
   }
   return years;
 }
@@ -218,6 +219,11 @@ function addYears(date, years) {
 function getBirthBalance(moonLongitude) {
   const nak = getNakshatraData(moonLongitude);
   const totalYears = getLordYears(nak.lord);
+
+  if (!totalYears) {
+    throw new Error(Missing Vimshottari years mapping for lord: ${String(nak.lord)});
+  }
+
   const consumedYearsAtBirth = totalYears * nak.consumedFraction;
   const remainingYearsAtBirth = totalYears * nak.remainingFraction;
 
@@ -236,22 +242,40 @@ function getBirthBalance(moonLongitude) {
 
 function getSequenceIndex(lord) {
   const proper = properLordName(lord);
+  if (!proper) {
+    throw new Error(Invalid dasha lord sequence for: ${String(lord)});
+  }
+
   const idx = DASHA_SEQUENCE.indexOf(proper);
   if (idx < 0) {
-    throw new Error(Invalid dasha lord sequence for: ${lord});
+    throw new Error(Invalid dasha lord index for: ${String(lord)});
   }
   return idx;
 }
 
 function computeAntardasha(mahaLord, mahaElapsedYears) {
   const mahaYears = getLordYears(mahaLord);
+  if (!mahaYears) {
+    return {
+      planet: "UNKNOWN",
+      total_years: 0,
+      elapsed_years: 0,
+      remaining_years: 0
+    };
+  }
+
   const sequence = DASHA_SEQUENCE.slice();
   const startIndex = getSequenceIndex(mahaLord);
 
-  let elapsed = mahaElapsedYears;
+  let elapsed = Number(mahaElapsedYears) || 0;
+
   for (let i = 0; i < sequence.length; i++) {
     const subLord = sequence[(startIndex + i) % sequence.length];
-    const subYears = (mahaYears * getLordYears(subLord)) / TOTAL_VIMSHOTTARI_YEARS;
+    const subLordYears = getLordYears(subLord);
+
+    if (!subLordYears) continue;
+
+    const subYears = (mahaYears * subLordYears) / TOTAL_VIMSHOTTARI_YEARS;
 
     if (elapsed <= subYears + 1e-12) {
       return {
@@ -265,10 +289,9 @@ function computeAntardasha(mahaLord, mahaElapsedYears) {
     elapsed -= subYears;
   }
 
-  const fallbackLord = sequence[startIndex];
   return {
-    planet: fallbackLord,
-    total_years: round((mahaYears * getLordYears(fallbackLord)) / TOTAL_VIMSHOTTARI_YEARS, 6),
+    planet: sequence[startIndex],
+    total_years: 0,
     elapsed_years: 0,
     remaining_years: 0
   };
@@ -283,6 +306,7 @@ function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
 
   if (!birthDatetimeRaw) {
     const fallbackEnds = addYears(asOf, birthBalance.remainingYearsAtBirth);
+
     return {
       mode: "balance_only_fallback",
       nakshatra: birthBalance.nakshatra,
@@ -330,6 +354,7 @@ function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
 
   if (remainingElapsed <= remainingInCurrent + 1e-12) {
     const antardasha = computeAntardasha(currentLord, elapsedInsideCurrent + remainingElapsed);
+
     return {
       mode: "full_natal",
       nakshatra: birthBalance.nakshatra,
@@ -360,6 +385,10 @@ function computeVimshottariDasha({ moonLongitude, birthDatetimeRaw, asOf }) {
     seqIndex = (seqIndex + 1) % sequence.length;
     currentLord = sequence[seqIndex];
     currentLordYears = getLordYears(currentLord);
+
+    if (!currentLordYears) {
+      throw new Error(Missing Vimshottari years for sequence lord: ${String(currentLord)});
+    }
 
     if (remainingElapsed <= currentLordYears + 1e-12) {
       const currentRemainingYears = currentLordYears - remainingElapsed;
