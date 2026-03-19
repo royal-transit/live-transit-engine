@@ -71,3 +71,104 @@ transit present
 kp present
 dasha present
 no dasha crash
+-----------------------------------
+BOUNDARY TEST
+
+11. NAKSHATRA BOUNDARY (29° → 0° SHIFT)
+- /api/dasha?moon_longitude=359.99
+- /api/dasha?moon_longitude=0.01
+Expected:
+no crash
+nakshatra valid
+no undefined
+
+12. SIGN CHANGE EDGE
+- /api/transit?lat=0&lon=0
+Expected:
+no crash
+valid signs
+valid houses
+
+13. MIDNIGHT TIME SHIFT
+- run oracle twice:
+  one before midnight
+  one after midnight
+Expected:
+timestamp valid
+no date shift error
+
+14. EXTREME LAT/LON
+- /api/transit?lat=90&lon=0
+- /api/transit?lat=-90&lon=0
+Expected:
+no crash
+fallback or valid output
+
+15. HIGH PRECISION FLOAT
+- /api/dasha?moon_longitude=335.463681123456
+Expected:
+no crash
+value accepted
+
+16. ZERO VALUE CHECK
+- /api/dasha?moon_longitude=0
+Expected:
+valid nakshatra
+no crash
+-----------------------------------
+NULL-FIELD TEST
+
+17. DASHA WITHOUT MOON_LONGITUDE
+- /api/dasha
+Expected:
+status 200
+structured error or safe fallback
+no 500 crash
+
+18. TRANSIT WITHOUT LAT/LON
+- /api/transit
+Expected:
+status 200
+default fallback location used
+no crash
+
+19. ORACLE WITHOUT LAT/LON
+- /api/oracle
+Expected:
+status 200
+default fallback location used
+evidence_packet present
+
+20. KP WITHOUT LAT/LON
+- /api/kp
+Expected:
+status 200
+fallback or structured error
+no crash
+
+21. DIVISIONAL WITHOUT LAT/LON
+- /api/divisional
+Expected:
+status 200
+fallback or structured error
+no crash
+
+22. EMPTY QUERY STRING
+- call each api with no parameters
+Expected:
+no 500 crash
+either valid fallback or structured error
+
+23. PARTIAL ORACLE PACKET CHECK
+- if one sub-api fails, oracle should still return packet
+Expected:
+status 200
+oracle_error not thrown
+other evidence fields still present
+
+24. MISSING TIMESTAMP / AS_OF CHECK
+- /api/dasha?moon_longitude=335.46
+Expected:
+status 200
+current server time used
+no crash
