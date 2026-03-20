@@ -1,43 +1,39 @@
 name: Daily Oracle Report
 
 on:
-  schedule:
-    - cron: '0 7 * * *'   # 7 AM UK time
   workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'
 
 jobs:
   run-oracle:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Generate Oracle Message from GPT
-        id: oracle
+      - name: Call OpenAI (simple)
+        id: openai
         run: |
-          RESPONSE=$(curl https://api.openai.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -H "Content-Type: application/json" \
             -d '{
               "model": "gpt-5.3",
               "messages": [
-                {
-                  "role": "system",
-                  "content": "You are Royel Oracle Engine. Give a daily prophetic astrology forecast for Royel using deterministic tone, include key events with exact times, and finish in Bengali lokkotha style."
-                },
-                {
-                  "role": "user",
-                  "content": "Generate today's full day prediction for Royel. Include: morning, afternoon, evening, night events with exact times (UK & BD). Keep it structured and prophetic."
-                }
+                {"role": "system", "content": "You are Royel Oracle Engine. Give short daily prophecy."},
+                {"role": "user", "content": "Give today's prediction in Bengali lokkotha style with times."}
               ]
             }')
 
-          MESSAGE=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          echo "$RESPONSE" > response.json
 
-          echo "MESSAGE<<EOF" >> $GITHUB_ENV
-          echo "$MESSAGE" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          cat response.json
 
-      - name: Send WhatsApp Message
+      - name: Extract message
+        run: |
+          MESSAGE=$(jq -r '.choices[0].message.content' response.json)
+          echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
+
+      - name: Send WhatsApp
         run: |
           curl -X POST "https://api.twilio.com/2010-04-01/Accounts/${{ secrets.TWILIO_ACCOUNT_SID }}/Messages.json" \
           --data-urlencode "To=${{ secrets.TO_WHATSAPP }}" \
