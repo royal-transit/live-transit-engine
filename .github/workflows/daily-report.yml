@@ -10,28 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Call OpenAI (simple)
-        id: openai
+      - name: Call OpenAI (fixed)
         run: |
+          cat <<EOF > request.json
+          {
+            "model": "gpt-4o",
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are Royel Oracle Engine. Give short daily prophecy."
+              },
+              {
+                "role": "user",
+                "content": "Give today's prediction in Bengali lokkotha style with times."
+              }
+            ]
+          }
+          EOF
+
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "model": "gpt-5.3",
-              "messages": [
-                {"role": "system", "content": "You are Royel Oracle Engine. Give short daily prophecy."},
-                {"role": "user", "content": "Give today's prediction in Bengali lokkotha style with times."}
-              ]
-            }')
+            -d @request.json)
 
           echo "$RESPONSE" > response.json
-
           cat response.json
 
       - name: Extract message
         run: |
           MESSAGE=$(jq -r '.choices[0].message.content' response.json)
-          echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
+          echo "MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Send WhatsApp
         run: |
