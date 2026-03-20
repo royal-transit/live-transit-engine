@@ -50,50 +50,18 @@ jobs:
           echo "DASHA=$dasha" >> "$GITHUB_ENV"
           echo "ORACLE=$oracle" >> "$GITHUB_ENV"
 
-      - name: Build Bengali Lokkotha Message
+      - name: Build Message
         run: |
-          UK_TIME=$(TZ=Europe/London date '+%d/%m/%Y, %A, %H:%M')
-          BD_TIME=$(TZ=Asia/Dhaka date '+%d/%m/%Y, %A, %H:%M')
+          UK_TIME=$(TZ=Europe/London date '+%d/%m/%Y %H:%M')
+          BD_TIME=$(TZ=Asia/Dhaka date '+%d/%m/%Y %H:%M')
 
           if [ "$STATUS" = "OK" ]; then
-            cat <<EOF > body.txt
-রয়েল, নিয়তির দরজা আজ ভোরে খুলে বলল—
-
-UK সময়: $UK_TIME
-BD সময়: $BD_TIME
-
-যন্ত্রের প্রদীপ জ্বলে আছে।
-Transit: $TRANSIT
-Dasha: $DASHA
-Oracle: $ORACLE
-
-লোককথা বলে—
-পথ আজ খোলা,
-হিসাব আজ মেলে,
-কাজ সামনে এগোয়।
-EOF
+            BODY="Royel, niyotir dorja aj vore khule bollo | UK: $UK_TIME | BD: $BD_TIME | Transit OK | Dasha OK | Oracle OK | Aj poth khola, hisab mile, kaj samne egobe."
           else
-            cat <<EOF > body.txt
-রয়েল, নিয়তির দরজা আজ সতর্ক করে বলল—
-
-UK সময়: $UK_TIME
-BD সময়: $BD_TIME
-
-Status: $STATUS
-Transit: $TRANSIT
-Dasha: $DASHA
-Oracle: $ORACLE
-
-লোককথা বলে—
-আকাশে ছায়া,
-পথে সামান্য গিঁট,
-আজ নজর রেখে চলাই ভালো।
-EOF
+            BODY="Royel, niyotir dorja aj sabdhan kore bollo | UK: $UK_TIME | BD: $BD_TIME | Status: $STATUS | Transit: $TRANSIT | Dasha: $DASHA | Oracle: $ORACLE | Aj chokh khola rekho."
           fi
 
-          echo "BODY<<EOF" >> "$GITHUB_ENV"
-          cat body.txt >> "$GITHUB_ENV"
-          echo "EOF" >> "$GITHUB_ENV"
+          echo "BODY=$BODY" >> "$GITHUB_ENV"
 
       - name: Send WhatsApp
         run: |
