@@ -1,52 +1,52 @@
-name: Daily Oracle Report
+name: Daily WhatsApp Reminder
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 7 * * *'
+    - cron: "0 9 * * *"
+  workflow_dispatch:
 
 jobs:
-  run-oracle:
+  daily-reminder:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Call OpenAI (fixed)
+      - name: Check core APIs
         run: |
-          cat <<EOF > request.json
-          {
-            "model": "gpt-4o",
-            "messages": [
-              {
-                "role": "system",
-                "content": "You are Royel Oracle Engine. Give short daily prophecy."
-              },
-              {
-                "role": "user",
-                "content": "Give today's prediction in Bengali lokkotha style with times."
-              }
-            ]
-          }
-          EOF
+          transit="FAIL"
+          dasha="FAIL"
+          oracle="FAIL"
 
-          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d @request.json)
+          curl -s "https://live-transit-engine.vercel.app/api/transit?lat=51.1465&lon=0.8756" > transit.json
+          if grep -q '"sun"' transit.json && grep -q '"moon"' transit.json; then
+            transit="OK"
+          fi
 
-          echo "$RESPONSE" > response.json
-          cat response.json
+          curl -s "https://live-transit-engine.vercel.app/api/dasha?moon_longitude=335.46" > dasha.json
+          if grep -q '"nakshatra"' dasha.json && grep -q '"current_mahadasha"' dasha.json; then
+            dasha="OK"
+          fi
 
-      - name: Extract message
+          curl -s "https://live-transit-engine.vercel.app/api/oracle?lat=51.1465&lon=0.8756" > oracle.json
+          if grep -q '"evidence_packet"' oracle.json; then
+            oracle="OK"
+          fi
+
+          status="OK"
+          if [ "$transit" != "OK" ] || [ "$dasha" != "OK" ] || [ "$oracle" != "OK" ]; then
+            status="ATTENTION NEEDED"
+          fi
+
+          echo "STATUS=$status" >> "$GITHUB_ENV"
+          echo "TRANSIT=$transit" >> "$GITHUB_ENV"
+          echo "DASHA=$dasha" >> "$GITHUB_ENV"
+          echo "ORACLE=$oracle" >> "$GITHUB_ENV"
+
+      - name: Send WhatsApp Daily Reminder
         run: |
-          MESSAGE=$(jq -r '.choices[0].message.content' response.json)
-          echo "MESSAGE<<EOF" >> $GITHUB_ENV
-          echo "$MESSAGE" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          BODY="Daily System Reminder | Status: $STATUS | Transit: $TRANSIT | Dasha: $DASHA | Oracle: $ORACLE"
 
-      - name: Send WhatsApp
-        run: |
           curl -X POST "https://api.twilio.com/2010-04-01/Accounts/${{ secrets.TWILIO_ACCOUNT_SID }}/Messages.json" \
-          --data-urlencode "To=${{ secrets.TO_WHATSAPP }}" \
-          --data-urlencode "From=whatsapp:+14155238886" \
-          --data-urlencode "Body=$MESSAGE" \
-          -u "${{ secrets.TWILIO_ACCOUNT_SID }}:${{ secrets.TWILIO_AUTH_TOKEN }}"
+            --data-urlencode "To=${{ secrets.TO_WHATSAPP }}" \
+            --data-urlencode "From=whatsapp:+14155238886" \
+            --data-urlencode "Body=$BODY" \
+            -u "${{ secrets.TWILIO_ACCOUNT_SID }}:${{ secrets.TWILIO_AUTH_TOKEN }}"
