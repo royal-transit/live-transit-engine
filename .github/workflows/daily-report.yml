@@ -56,12 +56,14 @@ jobs:
           BD_TIME=$(TZ=Asia/Dhaka date '+%d/%m/%Y %H:%M')
 
           if [ "$STATUS" = "OK" ]; then
-            BODY="Royel, niyotir dorja aj vore khule bollo | UK: $UK_TIME | BD: $BD_TIME | Transit OK | Dasha OK | Oracle OK | Aj poth khola, hisab mile, kaj samne egobe."
+            BODY=$'রয়েল, নিয়তির দরজা আজ ভোরে খুলে বলল—\n\n⏰ UK সময়: '"$UK_TIME"$'\n⏰ BD সময়: '"$BD_TIME"$'\n\nযন্ত্রের প্রদীপ জ্বলে আছে।\nTransit: OK\nDasha: OK\nOracle: OK\n\nলোককথা বলে—\nপথ আজ খোলা,\nহিসাব আজ মেলে,\nকাজ সামনে এগোয়।'
           else
-            BODY="Royel, niyotir dorja aj sabdhan kore bollo | UK: $UK_TIME | BD: $BD_TIME | Status: $STATUS | Transit: $TRANSIT | Dasha: $DASHA | Oracle: $ORACLE | Aj chokh khola rekho."
+            BODY=$'রয়েল, নিয়তির দরজা আজ সাবধান করে বলল—\n\n⏰ UK সময়: '"$UK_TIME"$'\n⏰ BD সময়: '"$BD_TIME"$'\n\nStatus: '"$STATUS"$'\nTransit: '"$TRANSIT"$'\nDasha: '"$DASHA"$'\nOracle: '"$ORACLE"$'\n\nআজ চোখ খোলা রেখে চল।'
           fi
 
-          echo "BODY=$BODY" >> "$GITHUB_ENV"
+          echo "BODY<<EOF" >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Send WhatsApp
         run: |
