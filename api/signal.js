@@ -48,11 +48,25 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
+
+      // 🔥 main output
       signal: signal,
       label: label,
       score: score,
+
+      // 🔥 explainability
       breakdown: breakdown,
-      engine_status: "signal_engine_v4_client_ready"
+      influences: influences,
+
+      // 🔥 future use (history tracking ready)
+      meta: {
+        version: "v5",
+        confidence: Math.min(Math.max(score + 3, 0), 5), 
+        // normalize score into 0–5 scale
+        engine: "astro_signal_engine"
+      },
+
+      engine_status: "signal_engine_v5_memory_ready"
     });
 
   } catch (error) {
