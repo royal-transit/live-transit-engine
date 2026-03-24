@@ -512,8 +512,10 @@ export default async function handler(req, res) {
       Saturn: getStrengthScore(result.saturn)
     };
 
-    const microTriggers = scanMicroTriggers(now, jd, flags);
-
+    const microTriggers = [
+  ...scanMicroTriggers(now, jd, flags),
+  ...detectUltraMicroTriggers(jd, flags, now)
+];
     result.micro_window = {
       scan_range_seconds: 300,
       step_seconds: 1,
@@ -536,4 +538,57 @@ export default async function handler(req, res) {
       details: error && error.message ? error.message : "unknown transit error"
     });
   }
+}
+function detectUltraMicroTriggers(jd, flags, baseDate) {
+  const triggers = [];
+
+  const moonNow = calcPlanet(jd, swe.SE_MOON, flags);
+
+  for (let offset = -300; offset <= 300; offset++) {
+    const jdStep = jd + offset / 86400;
+
+    const moon = calcPlanet(jdStep, swe.SE_MOON, flags);
+    const mercury = calcPlanet(jdStep, swe.SE_MERCURY, flags);
+    const mars = calcPlanet(jdStep, swe.SE_MARS, flags);
+
+    // 🔥 1. Exact aspect (tight)
+    const diffMM = getAngularDifference(moon.longitude, mercury.longitude);
+    const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
+
+    if (Math.abs(diffMM - 90) < 0.01) {
+      triggers.push({
+        type: "moon_mercury_exact_square",
+        exact_time: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    if (Math.abs(diffMMars - 90) < 0.01) {
+      triggers.push({
+        type: "moon_mars_exact_square",
+        exact_time: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    // 🔥 2. Nakshatra boundary hit
+    const nak = getNakshatraData(moon.longitude);
+
+    if (nak.offset_in_nak < 0.01) {
+      triggers.push({
+        type: "moon_nakshatra_entry",
+        nakshatra: nak.nakshatra,
+        exact_time: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    // 🔥 3. Degree hit (integer degree crossing)
+    if (Math.abs(moon.degree - Math.round(moon.degree)) < 0.01) {
+      triggers.push({
+        type: "moon_degree_lock",
+        degree: Math.round(moon.degree),
+        exact_time: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+  }
+
+  return triggers;
 }
