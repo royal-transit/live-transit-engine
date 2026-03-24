@@ -1,9 +1,13 @@
 export default async function handler(req, res) {
   try {
-    const moon_sign = "Taurus";
-    const sun_sign = "Pisces";
+    // 🔹 fetch live transit data
+    const response = await fetch("https://live-transit-engine.vercel.app/api/transit");
+    const data = await response.json();
 
-    // 🔹 basic logic layer
+    const moon_sign = data.moon_sign;
+    const sun_sign = data.sun_sign;
+
+    // 🔹 logic layer
     let verdict = "Neutral phase";
 
     if (moon_sign === "Taurus" && sun_sign === "Pisces") {
@@ -18,10 +22,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
+      source: "live_transit_api",
       moon_sign: moon_sign,
       sun_sign: sun_sign,
       oracle_verdict: verdict,
-      engine_status: "oracle_logic_v1_live"
+      engine_status: "oracle_live_connected"
     });
 
   } catch (error) {
