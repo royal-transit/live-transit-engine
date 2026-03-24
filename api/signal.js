@@ -1,16 +1,9 @@
 export default async function handler(req, res) {
   try {
-
     const lat = parseFloat(req.query?.lat ?? "51.5074");
     const lon = parseFloat(req.query?.lon ?? "-0.1278");
 
-    const proto =
-      req.headers["x-forwarded-proto"] ||
-      req.headers["x-forwarded-protocol"] ||
-      "https";
-
-    const host = req.headers.host;
-    const base = ${proto}://${host}/api;
+    const base = "https://live-transit-engine.vercel.app/api";
     const qs = ?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)};
 
     async function safeFetchJson(url) {
@@ -55,7 +48,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Micro triggers (MOST IMPORTANT)
+    // 3. Micro triggers
     for (const m of transit.micro_triggers || []) {
       signals.push({
         type: "micro_trigger",
@@ -71,11 +64,10 @@ export default async function handler(req, res) {
       signals: signals,
       engine_status: "signal_engine_ready"
     });
-
   } catch (error) {
     return res.status(200).json({
       status: "signal_error",
-      message: error.message
+      message: error && error.message ? error.message : "unknown signal error"
     });
   }
 }
