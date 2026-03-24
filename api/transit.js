@@ -12,7 +12,11 @@ export default async function handler(req, res) {
       sun_sign: "Pisces",
       moon_sign: "Taurus",
       saturn_sign: "Pisces",
-      status: "transit_basic_live"
+      jupiter_sign: "Gemini",
+      venus_sign: "Pisces",
+      mars_sign: "Aquarius",
+      mercury_sign: "Aquarius",
+      status: "transit_logic_v1_live"
     });
   } catch (error) {
     return res.status(500).json({
