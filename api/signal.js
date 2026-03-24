@@ -8,7 +8,7 @@ export default async function handler(req, res) {
 
     async function safeFetchJson(url) {
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, { cache: "no-store" });
         return await response.json();
       } catch (error) {
         return null;
@@ -26,7 +26,6 @@ export default async function handler(req, res) {
 
     const signals = [];
 
-    // 1. Strong conjunction signals
     for (const a of transit.aspects || []) {
       if (a.type === "conjunction") {
         signals.push({
@@ -37,7 +36,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. Strength dominance
     for (const p in transit.strength || {}) {
       if (transit.strength[p] >= 0.7) {
         signals.push({
@@ -48,7 +46,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Micro triggers
     for (const m of transit.micro_triggers || []) {
       signals.push({
         type: "micro_trigger",
