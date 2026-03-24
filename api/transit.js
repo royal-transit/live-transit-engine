@@ -545,6 +545,114 @@ function buildDashaContext(birthDateTime, now, flags) {
   };
 }
 
+function getDivisionalSign(signIndex, degreeInSign, division) {
+  const partSize = 30 / division;
+  const partIndex = Math.floor(degreeInSign / partSize);
+
+  if (division === 9) {
+    const movable = [0, 3, 6, 9];
+    const fixed = [1, 4, 7, 10];
+    const dual = [2, 5, 8, 11];
+
+    let startIndex = 0;
+    if (movable.includes(signIndex)) startIndex = signIndex;
+    if (fixed.includes(signIndex)) startIndex = (signIndex + 8) % 12;
+    if (dual.includes(signIndex)) startIndex = (signIndex + 4) % 12;
+
+    return (startIndex + partIndex) % 12;
+  }
+
+  if (division === 10) {
+    const movable = [0, 3, 6, 9];
+    const fixed = [1, 4, 7, 10];
+    const dual = [2, 5, 8, 11];
+
+    let startIndex = 0;
+    if (movable.includes(signIndex)) startIndex = signIndex;
+    if (fixed.includes(signIndex)) startIndex = (signIndex + 8) % 12;
+    if (dual.includes(signIndex)) startIndex = (signIndex + 4) % 12;
+
+    return (startIndex + partIndex) % 12;
+  }
+
+  return signIndex;
+}
+
+function buildDivisionalPlanet(longitude, division) {
+  const normalized = normalize360(longitude);
+  const signIndex = Math.floor(normalized / 30);
+  const degreeInSign = normalized % 30;
+  const divisionalSignIndex = getDivisionalSign(signIndex, degreeInSign, division);
+  const divisionalDegree = (degreeInSign % (30 / division)) * division;
+  const divisionalLongitude = divisionalSignIndex * 30 + divisionalDegree;
+  const nak = getNakshatraData(divisionalLongitude);
+
+  return {
+    sign: SIGNS[divisionalSignIndex],
+    degree: round(divisionalDegree, 6),
+    longitude: round(divisionalLongitude, 6),
+    nakshatra: nak.nakshatra,
+    nakshatra_lord: nak.nakshatra_lord,
+    pada: nak.pada
+  };
+}
+
+function buildDivisionalContext(birthDateTime, flags) {
+  const utHour =
+    birthDateTime.getUTCHours() +
+    birthDateTime.getUTCMinutes() / 60 +
+    birthDateTime.getUTCSeconds() / 3600;
+
+  const birthJd = swe.swe_julday(
+    birthDateTime.getUTCFullYear(),
+    birthDateTime.getUTCMonth() + 1,
+    birthDateTime.getUTCDate(),
+    utHour,
+    swe.SE_GREG_CAL
+  );
+
+  const sun = calcPlanet(birthJd, swe.SE_SUN, flags);
+  const moon = calcPlanet(birthJd, swe.SE_MOON, flags);
+  const mercury = calcPlanet(birthJd, swe.SE_MERCURY, flags);
+  const venus = calcPlanet(birthJd, swe.SE_VENUS, flags);
+  const mars = calcPlanet(birthJd, swe.SE_MARS, flags);
+  const jupiter = calcPlanet(birthJd, swe.SE_JUPITER, flags);
+  const saturn = calcPlanet(birthJd, swe.SE_SATURN, flags);
+  const rahu = calcPlanet(birthJd, swe.SE_TRUE_NODE, flags);
+  const ketuLongitude = normalize360(rahu.longitude + 180);
+
+  const birthHousesRaw = swe.swe_houses(birthJd, 51.5074, -0.1278, "P");
+  const birthHousesArray = parseHouseResult(birthHousesRaw);
+  const ascendantLongitude = normalize360(birthHousesArray[1]);
+
+  const sourcePlanets = {
+    ascendant: ascendantLongitude,
+    sun: sun.longitude,
+    moon: moon.longitude,
+    mercury: mercury.longitude,
+    venus: venus.longitude,
+    mars: mars.longitude,
+    jupiter: jupiter.longitude,
+    saturn: saturn.longitude,
+    rahu: rahu.longitude,
+    ketu: ketuLongitude
+  };
+
+  const divisional = {
+    status: "active",
+    birth_datetime_utc: birthDateTime.toISOString(),
+    D9: {},
+    D10: {}
+  };
+
+  for (const [key, longitude] of Object.entries(sourcePlanets)) {
+    divisional.D9[key] = buildDivisionalPlanet(longitude, 9);
+    divisional.D10[key] = buildDivisionalPlanet(longitude, 10);
+  }
+
+  return divisional;
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
@@ -671,11 +779,17 @@ export default async function handler(req, res) {
 
     if (birthDateTime) {
       result.dasha = buildDashaContext(birthDateTime, now, flags);
+      result.divisional = buildDivisionalContext(birthDateTime, flags);
     } else {
       result.dasha = {
         status: "absent_no_birth_datetime",
         required_input: "birth_datetime",
         format: "ISO 8601 with timezone, e.g. 1988-12-11T10:59:00+06:00"
+      };
+      result.divisional = {
+        status: "absent_no_birth_datetime",
+        required_input: "birth_datetime",
+        supported: ["D9", "D10"]
       };
     }
 
