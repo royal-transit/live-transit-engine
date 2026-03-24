@@ -11,35 +11,40 @@ export default async function handler(req, res) {
       mars_sign
     } = data;
 
-    let verdict = "Neutral phase";
+    // 🔹 structured interpretation
+    let influences = [];
 
-    // 🔥 upgraded logic
     if (moon_sign === "Taurus" && sun_sign === "Pisces") {
-      verdict = "Stable emotions + spiritual pull (mixed influence)";
+      influences.push("emotional stability + spiritual pull");
     }
 
     if (saturn_sign === "Pisces") {
-      verdict += " | karmic pressure active";
+      influences.push("karmic pressure");
     }
 
     if (jupiter_sign === "Gemini") {
-      verdict += " | knowledge + decision expansion";
+      influences.push("knowledge expansion");
     }
 
     if (mars_sign === "Aquarius") {
-      verdict += " | unconventional action energy";
+      influences.push("unconventional action");
     }
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
       source: "live_transit_api",
-      moon_sign,
-      sun_sign,
-      saturn_sign,
-      jupiter_sign,
-      mars_sign,
-      oracle_verdict: verdict,
-      engine_status: "oracle_multi_planet_v2"
+      planets: {
+        moon: moon_sign,
+        sun: sun_sign,
+        saturn: saturn_sign,
+        jupiter: jupiter_sign,
+        mars: mars_sign
+      },
+      analysis: {
+        influences: influences,
+        summary: influences.join(" | ")
+      },
+      engine_status: "oracle_structured_v3"
     });
 
   } catch (error) {
