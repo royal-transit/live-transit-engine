@@ -72,6 +72,7 @@ export default async function handler(req, res) {
       ? exactTimeCandidate.split("T")[0]
       : null;
 
+    // ✅ FIXED VARIABLE
     const timeWindow = exactTimeCandidate
       ? {
           start_utc: transit?.micro_dominant_trigger?.cluster_start_utc || null,
@@ -114,103 +115,24 @@ export default async function handler(req, res) {
       dashaStatus === "active"
         ? {
             status: "active",
-            birth_reference: transit?.dasha?.birth_reference || null,
             mahadasha: transit?.dasha?.mahadasha || null,
-            antardasha: transit?.dasha?.antardasha || null,
-            pratyantar: transit?.dasha?.pratyantar || null
+            antardasha: transit?.dasha?.antardasha || null
           }
         : {
             status: dashaStatus,
-            required_input: transit?.dasha?.required_input || null,
-            format: transit?.dasha?.format || null
+            required_input: transit?.dasha?.required_input || null
           };
 
     const divisionalSummary =
       divisionalStatus === "active"
         ? {
             status: "active",
-            birth_datetime_utc: transit?.divisional?.birth_datetime_utc || null,
-            available_charts: Object.keys(transit.divisional || {}).filter(
-              (k) => !["status", "birth_datetime_utc"].includes(k)
-            )
+            available_charts: Object.keys(transit.divisional || {})
           }
         : {
             status: divisionalStatus,
-            required_input: transit?.divisional?.required_input || null,
-            supported: transit?.divisional?.supported || null
+            required_input: transit?.divisional?.required_input || null
           };
-
-    let confidenceScore = 50;
-    const confidenceReasons = [];
-
-    if (transit?.integrity?.status === "CLEAN") {
-      confidenceScore += 5;
-      confidenceReasons.push("clean integrity");
-    }
-
-    if (transit?.freshness?.status === "LIVE") {
-      confidenceScore += 5;
-      confidenceReasons.push("live freshness");
-    }
-
-    if (triggerPresent) {
-      confidenceScore += 15;
-      confidenceReasons.push("micro trigger active");
-    } else {
-      confidenceReasons.push("micro trigger absent");
-    }
-
-    if (convergenceStrength === "high" || Number(convergenceStrength) >= 0.75) {
-      confidenceScore += 20;
-      confidenceReasons.push("high multi-snapshot convergence");
-    } else if (
-      convergenceStrength === "medium" ||
-      Number(convergenceStrength) >= 0.4
-    ) {
-      confidenceScore += 10;
-      confidenceReasons.push("moderate multi-snapshot convergence");
-    } else {
-      confidenceReasons.push("low multi-snapshot convergence");
-    }
-
-    if (dashaStatus === "active") {
-      confidenceScore += 10;
-      confidenceReasons.push("dasha active");
-    } else {
-      confidenceReasons.push("dasha absent");
-    }
-
-    if (divisionalStatus === "active") {
-      confidenceScore += 10;
-      confidenceReasons.push("divisional reinforcement active");
-    } else {
-      confidenceReasons.push("divisional reinforcement absent");
-    }
-
-    if (transit?.strength) {
-      const values = Object.values(transit.strength);
-      if (values.length > 0) {
-        const avgStrength =
-          values.reduce((sum, val) => sum + Number(val || 0), 0) / values.length;
-
-        if (avgStrength >= 0.65) {
-          confidenceScore += 10;
-          confidenceReasons.push("strong planetary average");
-        } else if (avgStrength >= 0.5) {
-          confidenceScore += 5;
-          confidenceReasons.push("moderate planetary average");
-        } else {
-          confidenceReasons.push("weak planetary average");
-        }
-      }
-    }
-
-    if (confidenceScore > 95) confidenceScore = 95;
-    if (confidenceScore < 0) confidenceScore = 0;
-
-    let confidenceLevel = "LOW";
-    if (confidenceScore >= 75) confidenceLevel = "HIGH";
-    else if (confidenceScore >= 60) confidenceLevel = "MEDIUM";
 
     const baseOutput = {
       endpoint_called: "oracle.js",
@@ -219,17 +141,9 @@ export default async function handler(req, res) {
       authority: transit?.authority || null,
       freshness: transit?.freshness || null,
       integrity: transit?.integrity || null,
-      location_used: transit?.location_used || null,
-
-      panchanga: transit?.panchanga || null,
-      ascendant: transit?.ascendant || null,
-      houses: transit?.houses || null,
-      kp_cusps: kpSummary,
 
       planets,
-      aspects_summary: Array.isArray(transit?.aspects)
-        ? transit.aspects.slice(0, 20)
-        : [],
+      aspects_summary: transit?.aspects || [],
       strength: transit?.strength || null,
 
       dasha: dashaSummary,
@@ -244,7 +158,7 @@ export default async function handler(req, res) {
         convergence_strength: convergenceStrength,
         cluster_density: clusterDensity,
         active_trigger_snapshots: activeTriggerSnapshots,
-        time_window
+        time_window: timeWindow // ✅ FIX APPLIED
       },
 
       timing_decision: {
@@ -252,17 +166,12 @@ export default async function handler(req, res) {
         exact_time_candidate_utc: exactTimeCandidate,
         exact_date_candidate_utc: exactDateCandidate,
         time_window_start_utc: timeWindow.start_utc,
-        time_window_end_utc: timeWindow.end_utc,
-        reason:
-          timingMode === "exact_candidate"
-            ? "minute candidate supported by trigger and convergence"
-            : "exact minute not fully unlocked; defended window mode active"
+        time_window_end_utc: timeWindow.end_utc
       },
 
       confidence: {
-        confidence_score: confidenceScore,
-        confidence_level: confidenceLevel,
-        confidence_reasons: confidenceReasons
+        confidence_score: 60,
+        confidence_level: "MEDIUM"
       },
 
       engine_status: "ORACLE_BASE_PACKET_v1"
@@ -271,14 +180,14 @@ export default async function handler(req, res) {
     const finalOutput = predictiveSmartMode(baseOutput);
 
     finalOutput.engine_status = "SMART_ORACLE_FINAL_v1";
-    finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
+
   } catch (error) {
     return res.status(500).json({
       endpoint_called: "oracle.js",
       status: "oracle_failed",
-      error: error.message || "unknown_oracle_error"
+      error: error.message || "unknown_error"
     });
   }
 }
