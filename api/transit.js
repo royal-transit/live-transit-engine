@@ -400,6 +400,21 @@ export default async function handler(req, res) {
     result.ascendant = buildPointData(ascendantLongitude);
     result.houses = calculateWholeSignHouses(ascendantLongitude);
 
+    result.kp_cusps = {};
+    for (let i = 1; i <= 12; i++) {
+      const cuspLongitude = normalize360(housesArray[i]);
+      const signData = getSignData(cuspLongitude);
+      const nakData = getNakshatraData(cuspLongitude);
+
+      result.kp_cusps[i] = {
+        longitude: round(cuspLongitude, 6),
+        sign: signData.sign,
+        degree: signData.degree,
+        star_lord: nakData.nakshatra_lord,
+        sub_lord: nakData.nakshatra_lord
+      };
+    }
+
     const planetLongitudes = {
       Sun: result.sun.longitude,
       Moon: result.moon.longitude,
