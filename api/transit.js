@@ -70,6 +70,8 @@ const VIMSHOTTARI_YEARS = {
   Mercury: 17
 };
 
+const YEAR_DAYS = 365.2425;
+
 function normalize360(value) {
   let result = value % 360;
   if (result < 0) result += 360;
@@ -321,6 +323,56 @@ function scanMicroTriggers(baseDate, jd, flags) {
   return triggers;
 }
 
+function detectUltraMicroTriggers(jd, flags, baseDate) {
+  const triggers = [];
+
+  for (let offset = -300; offset <= 300; offset++) {
+    const jdStep = jd + offset / 86400;
+
+    const moon = calcPlanet(jdStep, swe.SE_MOON, flags);
+    const mercury = calcPlanet(jdStep, swe.SE_MERCURY, flags);
+    const mars = calcPlanet(jdStep, swe.SE_MARS, flags);
+
+    const moonSign = getSignData(moon.longitude);
+    const nak = getNakshatraData(moon.longitude);
+
+    const diffMM = getAngularDifference(moon.longitude, mercury.longitude);
+    const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
+
+    if (Math.abs(diffMM - 90) < 0.05) {
+      triggers.push({
+        type: "moon_mercury_exact_square",
+        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    if (Math.abs(diffMMars - 90) < 0.05) {
+      triggers.push({
+        type: "moon_mars_exact_square",
+        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    if (nak.offset_in_nak < 0.05) {
+      triggers.push({
+        type: "moon_nakshatra_entry",
+        nakshatra: nak.nakshatra,
+        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+
+    if (Math.abs(moonSign.degree - Math.round(moonSign.degree)) < 0.05) {
+      triggers.push({
+        type: "moon_degree_lock",
+        degree: Math.round(moonSign.degree),
+        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+      });
+    }
+  }
+
+  return triggers;
+}
+
 function getSubLord(longitude) {
   const nak = getNakshatraData(longitude);
   const startLord = nak.nakshatra_lord;
@@ -348,12 +400,158 @@ function getSubLord(longitude) {
   return startLord;
 }
 
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 86400000);
+}
+
+function buildSubPeriods(startDate, endDate, startLord) {
+  const periods = [];
+  const totalDays = (endDate.getTime() - startDate.getTime()) / 86400000;
+  const startIndex = DASHA_SEQUENCE.indexOf(startLord);
+
+  let cursor = new Date(startDate);
+
+  for (let i = 0; i < DASHA_SEQUENCE.length; i++) {
+    const lord = DASHA_SEQUENCE[(startIndex + i) % DASHA_SEQUENCE.length];
+    const fraction = VIMSHOTTARI_YEARS[lord] / 120;
+    const segmentDays = totalDays * fraction;
+    const segmentEnd = addDays(cursor, segmentDays);
+
+    periods.push({
+      lord,
+      start: new Date(cursor),
+      end: new Date(segmentEnd),
+      duration_days: round(segmentDays, 4)
+    });
+
+    cursor = segmentEnd;
+  }
+
+  if (periods.length > 0) {
+    periods[periods.length - 1].end = new Date(endDate);
+    periods[periods.length - 1].duration_days = round(
+      (endDate.getTime() - periods[periods.length - 1].start.getTime()) / 86400000,
+      4
+    );
+  }
+
+  return periods;
+}
+
+function findActivePeriod(periods, targetDate) {
+  for (const period of periods) {
+    if (targetDate >= period.start && targetDate < period.end) {
+      return period;
+    }
+  }
+
+  return periods[periods.length - 1] || null;
+}
+
+function buildMahadashaTimeline(birthDate, moonLongitude, targetDate) {
+  const nak = getNakshatraData(moonLongitude);
+  const startLord = nak.nakshatra_lord;
+  const startIndex = DASHA_SEQUENCE.indexOf(startLord);
+
+  const elapsedFraction = nak.offset_in_nak / nak.nak_size;
+  const remainingFraction = 1 - elapsedFraction;
+  const firstYears = VIMSHOTTARI_YEARS[startLord] * remainingFraction;
+
+  const periods = [];
+  let cursor = new Date(birthDate);
+
+  for (let i = 0; i < 18; i++) {
+    const lord = DASHA_SEQUENCE[(startIndex + i) % DASHA_SEQUENCE.length];
+    const years = i === 0 ? firstYears : VIMSHOTTARI_YEARS[lord];
+    const days = years * YEAR_DAYS;
+    const end = addDays(cursor, days);
+
+    periods.push({
+      lord,
+      start: new Date(cursor),
+      end: new Date(end),
+      duration_years: round(years, 6),
+      duration_days: round(days, 4)
+    });
+
+    cursor = end;
+
+    if (cursor > addDays(targetDate, YEAR_DAYS * 2)) {
+      break;
+    }
+  }
+
+  return periods;
+}
+
+function parseBirthDateTime(input) {
+  if (!input || typeof input !== "string") return null;
+
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed;
+}
+
+function buildDashaContext(birthDateTime, now, flags) {
+  const utHour =
+    birthDateTime.getUTCHours() +
+    birthDateTime.getUTCMinutes() / 60 +
+    birthDateTime.getUTCSeconds() / 3600;
+
+  const birthJd = swe.swe_julday(
+    birthDateTime.getUTCFullYear(),
+    birthDateTime.getUTCMonth() + 1,
+    birthDateTime.getUTCDate(),
+    utHour,
+    swe.SE_GREG_CAL
+  );
+
+  const birthMoon = calcPlanet(birthJd, swe.SE_MOON, flags);
+  const birthMoonNak = getNakshatraData(birthMoon.longitude);
+
+  const mahaTimeline = buildMahadashaTimeline(birthDateTime, birthMoon.longitude, now);
+  const activeMaha = findActivePeriod(mahaTimeline, now);
+
+  const antarTimeline = buildSubPeriods(activeMaha.start, activeMaha.end, activeMaha.lord);
+  const activeAntar = findActivePeriod(antarTimeline, now);
+
+  const pratyantarTimeline = buildSubPeriods(activeAntar.start, activeAntar.end, activeAntar.lord);
+  const activePratyantar = findActivePeriod(pratyantarTimeline, now);
+
+  return {
+    status: "active",
+    birth_reference: {
+      birth_datetime_utc: birthDateTime.toISOString(),
+      birth_moon_longitude: round(birthMoon.longitude, 6),
+      birth_moon_nakshatra: birthMoonNak.nakshatra,
+      birth_moon_nakshatra_lord: birthMoonNak.nakshatra_lord
+    },
+    mahadasha: {
+      lord: activeMaha.lord,
+      start: activeMaha.start.toISOString(),
+      end: activeMaha.end.toISOString()
+    },
+    antardasha: {
+      lord: activeAntar.lord,
+      start: activeAntar.start.toISOString(),
+      end: activeAntar.end.toISOString()
+    },
+    pratyantar: {
+      lord: activePratyantar.lord,
+      start: activePratyantar.start.toISOString(),
+      end: activePratyantar.end.toISOString()
+    }
+  };
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
 
     const lat = parseFloat(req.query?.lat ?? "51.5074");
     const lon = parseFloat(req.query?.lon ?? "-0.1278");
+    const birthDateTimeRaw = req.query?.birth_datetime ?? null;
 
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
       return res.status(400).json({
@@ -469,6 +667,18 @@ export default async function handler(req, res) {
       };
     }
 
+    const birthDateTime = parseBirthDateTime(birthDateTimeRaw);
+
+    if (birthDateTime) {
+      result.dasha = buildDashaContext(birthDateTime, now, flags);
+    } else {
+      result.dasha = {
+        status: "absent_no_birth_datetime",
+        required_input: "birth_datetime",
+        format: "ISO 8601 with timezone, e.g. 1988-12-11T10:59:00+06:00"
+      };
+    }
+
     const planetLongitudes = {
       Sun: result.sun.longitude,
       Moon: result.moon.longitude,
@@ -513,9 +723,10 @@ export default async function handler(req, res) {
     };
 
     const microTriggers = [
-  ...scanMicroTriggers(now, jd, flags),
-  ...detectUltraMicroTriggers(jd, flags, now)
-];
+      ...scanMicroTriggers(now, jd, flags),
+      ...detectUltraMicroTriggers(jd, flags, now)
+    ];
+
     result.micro_window = {
       scan_range_seconds: 300,
       step_seconds: 1,
@@ -538,57 +749,4 @@ export default async function handler(req, res) {
       details: error && error.message ? error.message : "unknown transit error"
     });
   }
-}
-function detectUltraMicroTriggers(jd, flags, baseDate) {
-  const triggers = [];
-
-  const moonNow = calcPlanet(jd, swe.SE_MOON, flags);
-
-  for (let offset = -300; offset <= 300; offset++) {
-    const jdStep = jd + offset / 86400;
-
-    const moon = calcPlanet(jdStep, swe.SE_MOON, flags);
-    const mercury = calcPlanet(jdStep, swe.SE_MERCURY, flags);
-    const mars = calcPlanet(jdStep, swe.SE_MARS, flags);
-
-    // 🔥 1. Exact aspect (tight)
-    const diffMM = getAngularDifference(moon.longitude, mercury.longitude);
-    const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
-
-    if (Math.abs(diffMM - 90) < 0.05) {
-      triggers.push({
-        type: "moon_mercury_exact_square",
-        exact_time: buildIsoFromOffset(baseDate, offset)
-      });
-    }
-
-    if (Math.abs(diffMMars - 90) < 0.05) {
-      triggers.push({
-        type: "moon_mars_exact_square",
-        exact_time: buildIsoFromOffset(baseDate, offset)
-      });
-    }
-
-    // 🔥 2. Nakshatra boundary hit
-    const nak = getNakshatraData(moon.longitude);
-
-    if (nak.offset_in_nak < 0.05) {
-      triggers.push({
-        type: "moon_nakshatra_entry",
-        nakshatra: nak.nakshatra,
-        exact_time: buildIsoFromOffset(baseDate, offset)
-      });
-    }
-
-    // 🔥 3. Degree hit (integer degree crossing)
-    if (Math.abs(moon.degree - Math.round(moon.degree)) < 0.05) {
-      triggers.push({
-        type: "moon_degree_lock",
-        degree: Math.round(moon.degree),
-        exact_time: buildIsoFromOffset(baseDate, offset)
-      });
-    }
-  }
-
-  return triggers;
 }
