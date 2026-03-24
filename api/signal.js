@@ -5,44 +5,51 @@ export default async function handler(req, res) {
 
     const influences = data.analysis.influences;
 
-    let signal = "NEUTRAL";
-    let reason = [];
+    let score = 0;
+    let breakdown = [];
 
-    // 🔥 priority logic (order matters)
+    // 🔥 scoring system
 
-    // 1️⃣ Highest priority → karmic pressure
-    if (influences.includes("karmic pressure")) {
-      signal = "CAUTION";
-      reason.push("karmic pressure active");
-    }
-
-    // 2️⃣ Opportunity layer
     if (influences.includes("knowledge expansion")) {
-      if (signal === "CAUTION") {
-        signal = "WAIT";
-        reason.push("opportunity present but blocked");
-      } else {
-        signal = "GO";
-        reason.push("growth opportunity active");
-      }
+      score += 2;
+      breakdown.push("+2 knowledge expansion");
     }
 
-    // 3️⃣ Action modifier
     if (influences.includes("unconventional action")) {
-      reason.push("requires unconventional approach");
+      score += 1;
+      breakdown.push("+1 unconventional action");
     }
 
-    // 4️⃣ Emotional base
     if (influences.includes("emotional stability + spiritual pull")) {
-      reason.push("stable internal state");
+      score += 1;
+      breakdown.push("+1 emotional stability");
+    }
+
+    if (influences.includes("karmic pressure")) {
+      score -= 3;
+      breakdown.push("-3 karmic pressure");
+    }
+
+    // 🔥 signal decision based on score
+    let signal = "NEUTRAL";
+
+    if (score >= 2) {
+      signal = "GO";
+    } else if (score <= -1) {
+      signal = "CAUTION";
+    }
+
+    if (score >= 1 && score <= 2 && influences.includes("karmic pressure")) {
+      signal = "WAIT";
     }
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
       signal: signal,
-      reason: reason,
+      score: score,
+      breakdown: breakdown,
       based_on: influences,
-      engine_status: "signal_engine_v2_priority"
+      engine_status: "signal_engine_v3_score"
     });
 
   } catch (error) {
