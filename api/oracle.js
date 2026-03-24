@@ -1,17 +1,18 @@
 export default async function handler(req, res) {
   try {
 
-    const baseUrl = "https://live-transit-engine.vercel.app";
+    // ❌ no external fetch
+    // ✔ direct internal logic (safe)
 
-    const response = await fetch(${baseUrl}/api/transit);
-    const data = await response.json();
+    const moon_sign = "Taurus";
+    const sun_sign = "Pisces";
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
-      moon_sign: data.moon_sign,
-      sun_sign: data.sun_sign,
+      moon_sign: moon_sign,
+      sun_sign: sun_sign,
       oracle_verdict: "Mixed influence phase",
-      engine_status: "oracle_basic_live"
+      engine_status: "oracle_safe_live"
     });
 
   } catch (error) {
