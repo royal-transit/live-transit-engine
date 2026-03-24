@@ -8,7 +8,6 @@ export default async function handler(req, res) {
     let score = 0;
     let breakdown = [];
 
-    // scoring
     if (influences.includes("knowledge expansion")) {
       score += 2;
       breakdown.push("+2 growth");
@@ -29,7 +28,6 @@ export default async function handler(req, res) {
       breakdown.push("-3 karmic pressure");
     }
 
-    // signal
     let signal = "NEUTRAL";
     let label = "";
 
@@ -46,27 +44,28 @@ export default async function handler(req, res) {
       label = "Hold and observe";
     }
 
-    return res.status(200).json({
-      timestamp: new Date().toISOString(),
+    const now = new Date();
+    const cycle_date = now.toISOString().slice(0, 10);
 
-      // 🔥 main output
+    return res.status(200).json({
+      timestamp: now.toISOString(),
+      cycle_date: cycle_date,
+
       signal: signal,
       label: label,
       score: score,
 
-      // 🔥 explainability
       breakdown: breakdown,
       influences: influences,
 
-      // 🔥 future use (history tracking ready)
       meta: {
-        version: "v5",
-        confidence: Math.min(Math.max(score + 3, 0), 5), 
-        // normalize score into 0–5 scale
-        engine: "astro_signal_engine"
+        version: "v6",
+        confidence: Math.min(Math.max(score + 3, 0), 5),
+        engine: "astro_signal_engine",
+        cycle_tag: ${cycle_date}_${signal}
       },
 
-      engine_status: "signal_engine_v5_memory_ready"
+      engine_status: "signal_engine_v6_cycle_ready"
     });
 
   } catch (error) {
