@@ -133,7 +133,92 @@ export default async function handler(req, res) {
             status: divisionalStatus,
             required_input: transit?.divisional?.required_input || null
           };
+let confidenceScore = 30;
+const confidenceReasons = [];
 
+// integrity
+if (transit?.integrity?.status === "CLEAN") {
+  confidenceScore += 5;
+  confidenceReasons.push("clean integrity");
+}
+
+// freshness
+if (transit?.freshness?.status === "LIVE") {
+  confidenceScore += 5;
+  confidenceReasons.push("live freshness");
+}
+
+// trigger
+if (triggerPresent) {
+  confidenceScore += 25;
+  confidenceReasons.push("micro trigger active");
+} else {
+  confidenceReasons.push("no active trigger");
+}
+
+// convergence
+if (convergenceStrength === "high" || Number(convergenceStrength) >= 0.75) {
+  confidenceScore += 25;
+  confidenceReasons.push("high convergence");
+} else if (
+  convergenceStrength === "medium" ||
+  Number(convergenceStrength) >= 0.4
+) {
+  confidenceScore += 15;
+  confidenceReasons.push("medium convergence");
+} else {
+  confidenceReasons.push("low convergence");
+}
+
+// multi snapshot density
+if (activeTriggerSnapshots >= 5) {
+  confidenceScore += 10;
+  confidenceReasons.push("multi snapshot strong");
+}
+
+// dasha
+if (dashaStatus === "active") {
+  confidenceScore += 10;
+  confidenceReasons.push("dasha active");
+}
+
+// divisional
+if (divisionalStatus === "active") {
+  confidenceScore += 10;
+  confidenceReasons.push("divisional active");
+}
+
+// strength
+if (transit?.strength) {
+  const values = Object.values(transit.strength);
+  if (values.length > 0) {
+    const avgStrength =
+      values.reduce((sum, val) => sum + Number(val || 0), 0) / values.length;
+
+    if (avgStrength >= 0.65) {
+      confidenceScore += 10;
+      confidenceReasons.push("strong planetary strength");
+    } else if (avgStrength >= 0.5) {
+      confidenceScore += 5;
+      confidenceReasons.push("moderate planetary strength");
+    }
+  }
+}
+
+// timing mode boost
+if (timingMode === "exact_candidate") {
+  confidenceScore += 10;
+  confidenceReasons.push("exact timing unlocked");
+}
+
+// cap
+if (confidenceScore > 95) confidenceScore = 95;
+if (confidenceScore < 0) confidenceScore = 0;
+
+// level
+let confidenceLevel = "LOW";
+if (confidenceScore >= 75) confidenceLevel = "HIGH";
+else if (confidenceScore >= 60) confidenceLevel = "MEDIUM";
     const baseOutput = {
       endpoint_called: "oracle.js",
       timestamp: new Date().toISOString(),
@@ -170,9 +255,10 @@ export default async function handler(req, res) {
       },
 
       confidence: {
-        confidence_score: 60,
-        confidence_level: "MEDIUM"
-      },
+  confidence_score: confidenceScore,
+  confidence_level: confidenceLevel,
+  confidence_reasons: confidenceReasons
+},
 
       engine_status: "ORACLE_BASE_PACKET_v1"
     };
