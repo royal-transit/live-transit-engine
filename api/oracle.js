@@ -1,32 +1,45 @@
 export default async function handler(req, res) {
   try {
-    // 🔹 fetch live transit data
     const response = await fetch("https://live-transit-engine.vercel.app/api/transit");
     const data = await response.json();
 
-    const moon_sign = data.moon_sign;
-    const sun_sign = data.sun_sign;
+    const {
+      moon_sign,
+      sun_sign,
+      saturn_sign,
+      jupiter_sign,
+      mars_sign
+    } = data;
 
-    // 🔹 logic layer
     let verdict = "Neutral phase";
 
+    // 🔥 upgraded logic
     if (moon_sign === "Taurus" && sun_sign === "Pisces") {
-      verdict = "Mixed influence phase";
-    } else if (moon_sign === "Aries") {
-      verdict = "Action-driven phase";
-    } else if (moon_sign === "Cancer") {
-      verdict = "Emotional sensitivity phase";
-    } else if (moon_sign === "Leo") {
-      verdict = "Confidence rise phase";
+      verdict = "Stable emotions + spiritual pull (mixed influence)";
+    }
+
+    if (saturn_sign === "Pisces") {
+      verdict += " | karmic pressure active";
+    }
+
+    if (jupiter_sign === "Gemini") {
+      verdict += " | knowledge + decision expansion";
+    }
+
+    if (mars_sign === "Aquarius") {
+      verdict += " | unconventional action energy";
     }
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
       source: "live_transit_api",
-      moon_sign: moon_sign,
-      sun_sign: sun_sign,
+      moon_sign,
+      sun_sign,
+      saturn_sign,
+      jupiter_sign,
+      mars_sign,
       oracle_verdict: verdict,
-      engine_status: "oracle_live_connected"
+      engine_status: "oracle_multi_planet_v2"
     });
 
   } catch (error) {
