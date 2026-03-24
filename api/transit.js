@@ -308,13 +308,16 @@ function scanMicroTriggers(baseDate, jd, flags) {
 
       if (best && best.distance <= 0.05) {
         triggers.push({
+          type: `${pair.planet1.toLowerCase()}_${pair.planet2.toLowerCase()}_${target.name}`,
+          source: "aspect_scan",
           planet1: pair.planet1,
           planet2: pair.planet2,
           aspect: target.name,
           exact_angle: best.exact_angle,
           exactness_gap: round(best.distance, 6),
           exact_time_utc: buildIsoFromOffset(baseDate, best.offset),
-          second_offset_from_snapshot: best.offset
+          second_offset_from_snapshot: best.offset,
+          strength_score: round(1 - (best.distance / 0.05), 6)
         });
       }
     }
@@ -340,32 +343,48 @@ function detectUltraMicroTriggers(jd, flags, baseDate) {
     const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
 
     if (Math.abs(diffMM - 90) < 0.05) {
+      const gap = Math.abs(diffMM - 90);
       triggers.push({
         type: "moon_mercury_exact_square",
-        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+        source: "ultra_scan",
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: round(1 - (gap / 0.05), 6)
       });
     }
 
     if (Math.abs(diffMMars - 90) < 0.05) {
+      const gap = Math.abs(diffMMars - 90);
       triggers.push({
         type: "moon_mars_exact_square",
-        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+        source: "ultra_scan",
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: round(1 - (gap / 0.05), 6)
       });
     }
 
     if (nak.offset_in_nak < 0.05) {
+      const gap = nak.offset_in_nak;
       triggers.push({
         type: "moon_nakshatra_entry",
+        source: "ultra_scan",
         nakshatra: nak.nakshatra,
-        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: round(1 - (gap / 0.05), 6)
       });
     }
 
     if (Math.abs(moonSign.degree - Math.round(moonSign.degree)) < 0.05) {
+      const gap = Math.abs(moonSign.degree - Math.round(moonSign.degree));
       triggers.push({
         type: "moon_degree_lock",
+        source: "ultra_scan",
         degree: Math.round(moonSign.degree),
-        exact_time_utc: buildIsoFromOffset(baseDate, offset)
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: round(1 - (gap / 0.05), 6)
       });
     }
   }
@@ -653,6 +672,164 @@ function buildDivisionalContext(birthDateTime, flags) {
   return divisional;
 }
 
+function safeParseIso(dateString) {
+  const parsed = new Date(dateString);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function dedupeMicroTriggers(triggers) {
+  const seen = new Set();
+  const unique = [];
+
+  for (const trigger of triggers) {
+    const key = [
+      trigger.type || "",
+      trigger.degree ?? "",
+      trigger.nakshatra ?? "",
+      trigger.aspect ?? "",
+      trigger.planet1 ?? "",
+      trigger.planet2 ?? "",
+      trigger.exact_time_utc ?? ""
+    ].join("|");
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(trigger);
+    }
+  }
+
+  return unique.sort((a, b) => {
+    const ta = safeParseIso(a.exact_time_utc)?.getTime() ?? 0;
+    const tb = safeParseIso(b.exact_time_utc)?.getTime() ?? 0;
+    return ta - tb;
+  });
+}
+
+function buildTriggerSignature(trigger) {
+  return [
+    trigger.type || "",
+    trigger.degree ?? "",
+    trigger.nakshatra ?? "",
+    trigger.aspect ?? "",
+    trigger.planet1 ?? "",
+    trigger.planet2 ?? ""
+  ].join("|");
+}
+
+function clusterMicroTriggers(triggers) {
+  if (!triggers.length) {
+    return [];
+  }
+
+  const clusters = [];
+  let currentCluster = null;
+
+  for (const trigger of triggers) {
+    const time = safeParseIso(trigger.exact_time_utc);
+    if (!time) continue;
+
+    const signature = buildTriggerSignature(trigger);
+
+    if (!currentCluster) {
+      currentCluster = {
+        signature,
+        type: trigger.type || "unknown",
+        source: trigger.source || "unknown",
+        degree: trigger.degree ?? null,
+        nakshatra: trigger.nakshatra ?? null,
+        aspect: trigger.aspect ?? null,
+        planet1: trigger.planet1 ?? null,
+        planet2: trigger.planet2 ?? null,
+        cluster_start_utc: trigger.exact_time_utc,
+        cluster_end_utc: trigger.exact_time_utc,
+        items: [trigger]
+      };
+      continue;
+    }
+
+    const lastTime = safeParseIso(currentCluster.cluster_end_utc);
+    const secondsGap = lastTime ? (time.getTime() - lastTime.getTime()) / 1000 : 999999;
+
+    if (currentCluster.signature === signature && secondsGap <= 1.5) {
+      currentCluster.cluster_end_utc = trigger.exact_time_utc;
+      currentCluster.items.push(trigger);
+    } else {
+      clusters.push(finalizeCluster(currentCluster));
+      currentCluster = {
+        signature,
+        type: trigger.type || "unknown",
+        source: trigger.source || "unknown",
+        degree: trigger.degree ?? null,
+        nakshatra: trigger.nakshatra ?? null,
+        aspect: trigger.aspect ?? null,
+        planet1: trigger.planet1 ?? null,
+        planet2: trigger.planet2 ?? null,
+        cluster_start_utc: trigger.exact_time_utc,
+        cluster_end_utc: trigger.exact_time_utc,
+        items: [trigger]
+      };
+    }
+  }
+
+  if (currentCluster) {
+    clusters.push(finalizeCluster(currentCluster));
+  }
+
+  return clusters;
+}
+
+function finalizeCluster(cluster) {
+  const start = safeParseIso(cluster.cluster_start_utc);
+  const end = safeParseIso(cluster.cluster_end_utc);
+  const durationSeconds = start && end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000)) : 0;
+
+  let peakItem = cluster.items[0];
+  for (const item of cluster.items) {
+    const currentScore = item.strength_score ?? 0;
+    const bestScore = peakItem?.strength_score ?? 0;
+    if (currentScore > bestScore) {
+      peakItem = item;
+    }
+  }
+
+  const averageStrength =
+    cluster.items.reduce((sum, item) => sum + (item.strength_score ?? 0), 0) / cluster.items.length;
+
+  return {
+    type: cluster.type,
+    source: cluster.source,
+    degree: cluster.degree,
+    nakshatra: cluster.nakshatra,
+    aspect: cluster.aspect,
+    planet1: cluster.planet1,
+    planet2: cluster.planet2,
+    cluster_start_utc: cluster.cluster_start_utc,
+    cluster_end_utc: cluster.cluster_end_utc,
+    peak_time_utc: peakItem?.exact_time_utc ?? cluster.cluster_start_utc,
+    hit_count: cluster.items.length,
+    duration_seconds: durationSeconds,
+    average_strength: round(averageStrength, 6),
+    peak_strength: round(peakItem?.strength_score ?? 0, 6)
+  };
+}
+
+function getDominantCluster(clusters) {
+  if (!clusters.length) return null;
+
+  const ranked = [...clusters].sort((a, b) => {
+    if (b.peak_strength !== a.peak_strength) {
+      return b.peak_strength - a.peak_strength;
+    }
+    if (b.hit_count !== a.hit_count) {
+      return b.hit_count - a.hit_count;
+    }
+    return b.average_strength - a.average_strength;
+  });
+
+  return ranked[0];
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
@@ -836,24 +1013,54 @@ export default async function handler(req, res) {
       Saturn: getStrengthScore(result.saturn)
     };
 
-    const microTriggers = [
+    const rawMicroTriggers = [
       ...scanMicroTriggers(now, jd, flags),
       ...detectUltraMicroTriggers(jd, flags, now)
     ];
 
+    const dedupedMicroTriggers = dedupeMicroTriggers(rawMicroTriggers);
+    const microClusters = clusterMicroTriggers(dedupedMicroTriggers);
+    const dominantCluster = getDominantCluster(microClusters);
+
     result.micro_window = {
       scan_range_seconds: 300,
       step_seconds: 1,
-      trigger_count: microTriggers.length,
-      precision_mode: "ultra_micro_scan"
+      raw_trigger_count: rawMicroTriggers.length,
+      unique_trigger_count: dedupedMicroTriggers.length,
+      cluster_count: microClusters.length,
+      precision_mode: dominantCluster ? "clustered_micro_scan" : "ultra_micro_scan"
     };
 
     result.micro_status = {
-      trigger_present: microTriggers.length > 0,
-      precision_allowed: microTriggers.length > 0 ? "minute_candidate" : "window_only"
+      trigger_present: microClusters.length > 0,
+      precision_allowed: microClusters.length > 0 ? "minute_candidate" : "window_only"
     };
 
-    result.micro_triggers = microTriggers;
+    result.micro_convergence = {
+      convergence_strength: dominantCluster ? dominantCluster.peak_strength : 0,
+      cluster_density: dominantCluster ? dominantCluster.hit_count : 0,
+      dominant_trigger_identity: dominantCluster ? dominantCluster.type : null
+    };
+
+    result.micro_dominant_trigger = dominantCluster
+      ? {
+          type: dominantCluster.type,
+          peak_time_utc: dominantCluster.peak_time_utc,
+          cluster_start_utc: dominantCluster.cluster_start_utc,
+          cluster_end_utc: dominantCluster.cluster_end_utc,
+          hit_count: dominantCluster.hit_count,
+          average_strength: dominantCluster.average_strength,
+          peak_strength: dominantCluster.peak_strength,
+          degree: dominantCluster.degree,
+          nakshatra: dominantCluster.nakshatra,
+          aspect: dominantCluster.aspect,
+          planet1: dominantCluster.planet1,
+          planet2: dominantCluster.planet2
+        }
+      : null;
+
+    result.micro_clusters = microClusters;
+    result.micro_triggers = dedupedMicroTriggers;
 
     return res.status(200).json(result);
 
