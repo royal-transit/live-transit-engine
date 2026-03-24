@@ -46,13 +46,6 @@ const DEBILITATION_SIGNS = {
   Saturn: "Aries"
 };
 
-const MICRO_ASPECT_TARGETS = [
-  { name: "conjunction", angle: 0 },
-  { name: "square", angle: 90 },
-  { name: "trine", angle: 120 },
-  { name: "opposition", angle: 180 }
-];
-
 const DASHA_SEQUENCE = [
   "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu",
   "Jupiter", "Saturn", "Mercury"
@@ -71,6 +64,29 @@ const VIMSHOTTARI_YEARS = {
 };
 
 const YEAR_DAYS = 365.2425;
+const NAK_SIZE = 360 / 27;
+const PADA_SIZE = NAK_SIZE / 4;
+
+const TRIGGER_PAIRS = [
+  { planet1: "Moon", planet2: "Mercury", id1: swe.SE_MOON, id2: swe.SE_MERCURY },
+  { planet1: "Moon", planet2: "Mars", id1: swe.SE_MOON, id2: swe.SE_MARS },
+  { planet1: "Moon", planet2: "Rahu", id1: swe.SE_MOON, id2: swe.SE_TRUE_NODE },
+  { planet1: "Moon", planet2: "Saturn", id1: swe.SE_MOON, id2: swe.SE_SATURN },
+  { planet1: "Moon", planet2: "Jupiter", id1: swe.SE_MOON, id2: swe.SE_JUPITER },
+  { planet1: "Mercury", planet2: "Mars", id1: swe.SE_MERCURY, id2: swe.SE_MARS },
+  { planet1: "Mercury", planet2: "Rahu", id1: swe.SE_MERCURY, id2: swe.SE_TRUE_NODE },
+  { planet1: "Mars", planet2: "Rahu", id1: swe.SE_MARS, id2: swe.SE_TRUE_NODE },
+  { planet1: "Sun", planet2: "Saturn", id1: swe.SE_SUN, id2: swe.SE_SATURN },
+  { planet1: "Venus", planet2: "Jupiter", id1: swe.SE_VENUS, id2: swe.SE_JUPITER }
+];
+
+const MICRO_ASPECT_TARGETS = [
+  { name: "conjunction", angle: 0, orb: 0.05 },
+  { name: "sextile", angle: 60, orb: 0.05 },
+  { name: "square", angle: 90, orb: 0.05 },
+  { name: "trine", angle: 120, orb: 0.05 },
+  { name: "opposition", angle: 180, orb: 0.05 }
+];
 
 function normalize360(value) {
   let result = value % 360;
@@ -87,25 +103,24 @@ function getSignData(longitude) {
   const signIndex = Math.floor(normalized / 30);
   return {
     sign: SIGNS[signIndex],
+    sign_index: signIndex,
     degree: round(normalized % 30, 6)
   };
 }
 
 function getNakshatraData(longitude) {
   const normalized = normalize360(longitude);
-  const nakSize = 360 / 27;
-  const padaSize = nakSize / 4;
-
-  const nakIndex = Math.floor(normalized / nakSize);
-  const pada = Math.floor((normalized % nakSize) / padaSize) + 1;
+  const nakIndex = Math.floor(normalized / NAK_SIZE);
+  const offsetInNak = normalized % NAK_SIZE;
+  const pada = Math.floor(offsetInNak / PADA_SIZE) + 1;
 
   return {
     nakshatra: NAKSHATRAS[nakIndex],
     nakshatra_lord: NAK_LORDS[nakIndex],
     pada,
     nak_index: nakIndex,
-    offset_in_nak: normalized % nakSize,
-    nak_size: nakSize
+    offset_in_nak: offsetInNak,
+    nak_size: NAK_SIZE
   };
 }
 
@@ -122,13 +137,11 @@ function getAngularDifference(a, b) {
 
 function isCombust(planetName, sunLongitude, planetLongitude) {
   const diff = getAngularDifference(sunLongitude, planetLongitude);
-
   if (planetName === "Mercury") return diff < 14;
   if (planetName === "Venus") return diff < 10;
   if (planetName === "Mars") return diff < 17;
   if (planetName === "Jupiter") return diff < 11;
   if (planetName === "Saturn") return diff < 15;
-
   return false;
 }
 
@@ -165,7 +178,6 @@ function buildPointData(longitude) {
   const normalizedLongitude = normalize360(longitude);
   const signData = getSignData(normalizedLongitude);
   const nakData = getNakshatraData(normalizedLongitude);
-
   return {
     longitude: round(normalizedLongitude, 6),
     sign: signData.sign,
@@ -180,22 +192,9 @@ function parseCalcResult(result) {
   if (!result) throw new Error("Swiss Ephemeris returned empty result");
   if (result.error) throw new Error(String(result.error));
 
-  const longitude =
-    result.longitude ??
-    result.lon ??
-    result.xx?.[0];
-
-  const latitude =
-    result.latitude ??
-    result.lat ??
-    result.xx?.[1] ??
-    0;
-
-  const speed =
-    result.speed ??
-    result.speedLong ??
-    result.xx?.[3] ??
-    0;
+  const longitude = result.longitude ?? result.lon ?? result.xx?.[0];
+  const latitude = result.latitude ?? result.lat ?? result.xx?.[1] ?? 0;
+  const speed = result.speed ?? result.speedLong ?? result.xx?.[3] ?? 0;
 
   if (typeof longitude !== "number" || Number.isNaN(longitude)) {
     throw new Error("Swiss Ephemeris longitude missing or invalid");
@@ -210,16 +209,8 @@ function calcPlanet(jd, planetId, flags) {
 
 function parseHouseResult(result) {
   if (!result) throw new Error("Swiss Ephemeris houses returned empty");
-
-  const housesArray =
-    result.house ??
-    result.houses ??
-    result.xx;
-
-  if (!housesArray || !housesArray[1]) {
-    throw new Error("houses array missing");
-  }
-
+  const housesArray = result.house ?? result.houses ?? result.xx;
+  if (!housesArray || !housesArray[1]) throw new Error("houses array missing");
   return housesArray;
 }
 
@@ -232,22 +223,17 @@ function getAspect(a, b) {
   if (Math.abs(orb - 90) < 6) return "square";
   if (Math.abs(orb - 120) < 6) return "trine";
   if (Math.abs(orb - 180) < 6) return "opposition";
-
   return null;
 }
 
 function getStrengthScore(planet) {
   let score = 0.5;
-
   if (planet.dignity === "exalted") score = 0.9;
   if (planet.dignity === "debilitated") score = 0.2;
-
   if (planet.retrograde) score += 0.05;
   if (planet.combust) score -= 0.15;
-
   if (score > 1) score = 1;
   if (score < 0) score = 0;
-
   return round(score, 2);
 }
 
@@ -255,141 +241,15 @@ function calculateWholeSignHouses(ascendantLongitude) {
   const ascNormalized = normalize360(ascendantLongitude);
   const ascSignIndex = Math.floor(ascNormalized / 30);
   const houses = {};
-
   for (let i = 1; i <= 12; i++) {
     const signIndex = (ascSignIndex + (i - 1)) % 12;
-    const signStart = signIndex * 30;
-    houses[String(i)] = buildPointData(signStart);
+    houses[String(i)] = buildPointData(signIndex * 30);
   }
-
   return houses;
-}
-
-function getTargetDistance(diff, target) {
-  return Math.abs(diff - target);
 }
 
 function buildIsoFromOffset(baseDate, offsetSeconds) {
   return new Date(baseDate.getTime() + offsetSeconds * 1000).toISOString();
-}
-
-function scanMicroTriggers(baseDate, jd, flags) {
-  const triggers = [];
-  const pairs = [
-    { planet1: "Moon", planet2: "Mercury", id1: swe.SE_MOON, id2: swe.SE_MERCURY },
-    { planet1: "Moon", planet2: "Mars", id1: swe.SE_MOON, id2: swe.SE_MARS },
-    { planet1: "Moon", planet2: "Rahu", id1: swe.SE_MOON, id2: swe.SE_TRUE_NODE },
-    { planet1: "Mercury", planet2: "Mars", id1: swe.SE_MERCURY, id2: swe.SE_MARS },
-    { planet1: "Mercury", planet2: "Rahu", id1: swe.SE_MERCURY, id2: swe.SE_TRUE_NODE },
-    { planet1: "Mars", planet2: "Rahu", id1: swe.SE_MARS, id2: swe.SE_TRUE_NODE },
-    { planet1: "Venus", planet2: "Jupiter", id1: swe.SE_VENUS, id2: swe.SE_JUPITER },
-    { planet1: "Sun", planet2: "Saturn", id1: swe.SE_SUN, id2: swe.SE_SATURN }
-  ];
-
-  for (const pair of pairs) {
-    for (const target of MICRO_ASPECT_TARGETS) {
-      let best = null;
-
-      for (let offset = -300; offset <= 300; offset += 1) {
-        const jdStep = jd + offset / 86400;
-        const p1 = calcPlanet(jdStep, pair.id1, flags);
-        const p2 = calcPlanet(jdStep, pair.id2, flags);
-        const diff = getAngularDifference(p1.longitude, p2.longitude);
-        const distance = getTargetDistance(diff, target.angle);
-
-        if (!best || distance < best.distance) {
-          best = {
-            distance,
-            offset,
-            exact_angle: round(diff, 6)
-          };
-        }
-      }
-
-      if (best && best.distance <= 0.05) {
-        triggers.push({
-          type: `${pair.planet1.toLowerCase()}_${pair.planet2.toLowerCase()}_${target.name}`,
-          source: "aspect_scan",
-          planet1: pair.planet1,
-          planet2: pair.planet2,
-          aspect: target.name,
-          exact_angle: best.exact_angle,
-          exactness_gap: round(best.distance, 6),
-          exact_time_utc: buildIsoFromOffset(baseDate, best.offset),
-          second_offset_from_snapshot: best.offset,
-          strength_score: round(1 - (best.distance / 0.05), 6)
-        });
-      }
-    }
-  }
-
-  return triggers;
-}
-
-function detectUltraMicroTriggers(jd, flags, baseDate) {
-  const triggers = [];
-
-  for (let offset = -300; offset <= 300; offset++) {
-    const jdStep = jd + offset / 86400;
-
-    const moon = calcPlanet(jdStep, swe.SE_MOON, flags);
-    const mercury = calcPlanet(jdStep, swe.SE_MERCURY, flags);
-    const mars = calcPlanet(jdStep, swe.SE_MARS, flags);
-
-    const moonSign = getSignData(moon.longitude);
-    const nak = getNakshatraData(moon.longitude);
-
-    const diffMM = getAngularDifference(moon.longitude, mercury.longitude);
-    const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
-
-    if (Math.abs(diffMM - 90) < 0.05) {
-      const gap = Math.abs(diffMM - 90);
-      triggers.push({
-        type: "moon_mercury_exact_square",
-        source: "ultra_scan",
-        exact_time_utc: buildIsoFromOffset(baseDate, offset),
-        second_offset_from_snapshot: offset,
-        strength_score: round(1 - (gap / 0.05), 6)
-      });
-    }
-
-    if (Math.abs(diffMMars - 90) < 0.05) {
-      const gap = Math.abs(diffMMars - 90);
-      triggers.push({
-        type: "moon_mars_exact_square",
-        source: "ultra_scan",
-        exact_time_utc: buildIsoFromOffset(baseDate, offset),
-        second_offset_from_snapshot: offset,
-        strength_score: round(1 - (gap / 0.05), 6)
-      });
-    }
-
-    if (nak.offset_in_nak < 0.05) {
-      const gap = nak.offset_in_nak;
-      triggers.push({
-        type: "moon_nakshatra_entry",
-        source: "ultra_scan",
-        nakshatra: nak.nakshatra,
-        exact_time_utc: buildIsoFromOffset(baseDate, offset),
-        second_offset_from_snapshot: offset,
-        strength_score: round(1 - (gap / 0.05), 6)
-      });
-    }
-
-    if (Math.abs(moonSign.degree - Math.round(moonSign.degree)) < 0.05) {
-      const gap = Math.abs(moonSign.degree - Math.round(moonSign.degree));
-      triggers.push({
-        type: "moon_degree_lock",
-        source: "ultra_scan",
-        degree: Math.round(moonSign.degree),
-        exact_time_utc: buildIsoFromOffset(baseDate, offset),
-        second_offset_from_snapshot: offset,
-        strength_score: round(1 - (gap / 0.05), 6)
-      });
-    }
-  }
-
-  return triggers;
 }
 
 function getSubLord(longitude) {
@@ -397,21 +257,14 @@ function getSubLord(longitude) {
   const startLord = nak.nakshatra_lord;
   const startIndex = DASHA_SEQUENCE.indexOf(startLord);
 
-  if (startIndex === -1) {
-    return startLord;
-  }
-
-  const nakSize = nak.nak_size;
-  const offset = nak.offset_in_nak;
+  if (startIndex === -1) return startLord;
 
   let cumulative = 0;
-
   for (let i = 0; i < DASHA_SEQUENCE.length; i++) {
     const lord = DASHA_SEQUENCE[(startIndex + i) % DASHA_SEQUENCE.length];
-    const segmentSize = nakSize * (VIMSHOTTARI_YEARS[lord] / 120);
+    const segmentSize = nak.nak_size * (VIMSHOTTARI_YEARS[lord] / 120);
     cumulative += segmentSize;
-
-    if (offset <= cumulative + 1e-10) {
+    if (nak.offset_in_nak <= cumulative + 1e-10) {
       return lord;
     }
   }
@@ -427,7 +280,6 @@ function buildSubPeriods(startDate, endDate, startLord) {
   const periods = [];
   const totalDays = (endDate.getTime() - startDate.getTime()) / 86400000;
   const startIndex = DASHA_SEQUENCE.indexOf(startLord);
-
   let cursor = new Date(startDate);
 
   for (let i = 0; i < DASHA_SEQUENCE.length; i++) {
@@ -459,11 +311,8 @@ function buildSubPeriods(startDate, endDate, startLord) {
 
 function findActivePeriod(periods, targetDate) {
   for (const period of periods) {
-    if (targetDate >= period.start && targetDate < period.end) {
-      return period;
-    }
+    if (targetDate >= period.start && targetDate < period.end) return period;
   }
-
   return periods[periods.length - 1] || null;
 }
 
@@ -471,7 +320,6 @@ function buildMahadashaTimeline(birthDate, moonLongitude, targetDate) {
   const nak = getNakshatraData(moonLongitude);
   const startLord = nak.nakshatra_lord;
   const startIndex = DASHA_SEQUENCE.indexOf(startLord);
-
   const elapsedFraction = nak.offset_in_nak / nak.nak_size;
   const remainingFraction = 1 - elapsedFraction;
   const firstYears = VIMSHOTTARI_YEARS[startLord] * remainingFraction;
@@ -494,10 +342,7 @@ function buildMahadashaTimeline(birthDate, moonLongitude, targetDate) {
     });
 
     cursor = end;
-
-    if (cursor > addDays(targetDate, YEAR_DAYS * 2)) {
-      break;
-    }
+    if (cursor > addDays(targetDate, YEAR_DAYS * 2)) break;
   }
 
   return periods;
@@ -505,10 +350,8 @@ function buildMahadashaTimeline(birthDate, moonLongitude, targetDate) {
 
 function parseBirthDateTime(input) {
   if (!input || typeof input !== "string") return null;
-
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
-
   return parsed;
 }
 
@@ -531,10 +374,8 @@ function buildDashaContext(birthDateTime, now, flags) {
 
   const mahaTimeline = buildMahadashaTimeline(birthDateTime, birthMoon.longitude, now);
   const activeMaha = findActivePeriod(mahaTimeline, now);
-
   const antarTimeline = buildSubPeriods(activeMaha.start, activeMaha.end, activeMaha.lord);
   const activeAntar = findActivePeriod(antarTimeline, now);
-
   const pratyantarTimeline = buildSubPeriods(activeAntar.start, activeAntar.end, activeAntar.lord);
   const activePratyantar = findActivePeriod(pratyantarTimeline, now);
 
@@ -568,33 +409,16 @@ function getDivisionalSign(signIndex, degreeInSign, division) {
   const partSize = 30 / division;
   const partIndex = Math.floor(degreeInSign / partSize);
 
-  if (division === 9) {
-    const movable = [0, 3, 6, 9];
-    const fixed = [1, 4, 7, 10];
-    const dual = [2, 5, 8, 11];
+  const movable = [0, 3, 6, 9];
+  const fixed = [1, 4, 7, 10];
+  const dual = [2, 5, 8, 11];
 
-    let startIndex = 0;
-    if (movable.includes(signIndex)) startIndex = signIndex;
-    if (fixed.includes(signIndex)) startIndex = (signIndex + 8) % 12;
-    if (dual.includes(signIndex)) startIndex = (signIndex + 4) % 12;
+  let startIndex = signIndex;
+  if (fixed.includes(signIndex)) startIndex = (signIndex + 8) % 12;
+  if (dual.includes(signIndex)) startIndex = (signIndex + 4) % 12;
+  if (movable.includes(signIndex)) startIndex = signIndex;
 
-    return (startIndex + partIndex) % 12;
-  }
-
-  if (division === 10) {
-    const movable = [0, 3, 6, 9];
-    const fixed = [1, 4, 7, 10];
-    const dual = [2, 5, 8, 11];
-
-    let startIndex = 0;
-    if (movable.includes(signIndex)) startIndex = signIndex;
-    if (fixed.includes(signIndex)) startIndex = (signIndex + 8) % 12;
-    if (dual.includes(signIndex)) startIndex = (signIndex + 4) % 12;
-
-    return (startIndex + partIndex) % 12;
-  }
-
-  return signIndex;
+  return (startIndex + partIndex) % 12;
 }
 
 function buildDivisionalPlanet(longitude, division) {
@@ -616,7 +440,7 @@ function buildDivisionalPlanet(longitude, division) {
   };
 }
 
-function buildDivisionalContext(birthDateTime, flags) {
+function buildDivisionalContext(birthDateTime, lat, lon, flags) {
   const utHour =
     birthDateTime.getUTCHours() +
     birthDateTime.getUTCMinutes() / 60 +
@@ -640,7 +464,7 @@ function buildDivisionalContext(birthDateTime, flags) {
   const rahu = calcPlanet(birthJd, swe.SE_TRUE_NODE, flags);
   const ketuLongitude = normalize360(rahu.longitude + 180);
 
-  const birthHousesRaw = swe.swe_houses(birthJd, 51.5074, -0.1278, "P");
+  const birthHousesRaw = swe.swe_houses(birthJd, lat, lon, "P");
   const birthHousesArray = parseHouseResult(birthHousesRaw);
   const ascendantLongitude = normalize360(birthHousesArray[1]);
 
@@ -660,22 +484,133 @@ function buildDivisionalContext(birthDateTime, flags) {
   const divisional = {
     status: "active",
     birth_datetime_utc: birthDateTime.toISOString(),
+    D7: {},
     D9: {},
-    D10: {}
+    D10: {},
+    D12: {},
+    D24: {}
   };
 
   for (const [key, longitude] of Object.entries(sourcePlanets)) {
+    divisional.D7[key] = buildDivisionalPlanet(longitude, 7);
     divisional.D9[key] = buildDivisionalPlanet(longitude, 9);
     divisional.D10[key] = buildDivisionalPlanet(longitude, 10);
+    divisional.D12[key] = buildDivisionalPlanet(longitude, 12);
+    divisional.D24[key] = buildDivisionalPlanet(longitude, 24);
   }
 
   return divisional;
 }
 
-function safeParseIso(dateString) {
-  const parsed = new Date(dateString);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
+function buildMicroAspectTriggers(baseDate, jd, flags) {
+  const triggers = [];
+
+  for (const pair of TRIGGER_PAIRS) {
+    for (const target of MICRO_ASPECT_TARGETS) {
+      let best = null;
+
+      for (let offset = -900; offset <= 900; offset += 1) {
+        const jdStep = jd + offset / 86400;
+        const p1 = calcPlanet(jdStep, pair.id1, flags);
+        const p2 = calcPlanet(jdStep, pair.id2, flags);
+        const diff = getAngularDifference(p1.longitude, p2.longitude);
+        const gap = Math.abs(diff - target.angle);
+
+        if (!best || gap < best.gap) {
+          best = {
+            gap,
+            offset,
+            exact_angle: round(diff, 6)
+          };
+        }
+      }
+
+      if (best && best.gap <= target.orb) {
+        triggers.push({
+          type: `${pair.planet1.toLowerCase()}_${pair.planet2.toLowerCase()}_${target.name}`,
+          source: "aspect_scan",
+          planet1: pair.planet1,
+          planet2: pair.planet2,
+          aspect: target.name,
+          exact_angle: best.exact_angle,
+          exactness_gap: round(best.gap, 6),
+          exact_time_utc: buildIsoFromOffset(baseDate, best.offset),
+          second_offset_from_snapshot: best.offset,
+          strength_score: round(1 - best.gap / target.orb, 6)
+        });
+      }
+    }
+  }
+
+  return triggers;
+}
+
+function buildMoonBoundaryTriggers(baseDate, jd, flags) {
+  const triggers = [];
+
+  let prevSign = null;
+  let prevNak = null;
+  let prevPada = null;
+
+  for (let offset = -900; offset <= 900; offset += 1) {
+    const jdStep = jd + offset / 86400;
+    const moon = calcPlanet(jdStep, swe.SE_MOON, flags);
+    const signData = getSignData(moon.longitude);
+    const nakData = getNakshatraData(moon.longitude);
+
+    if (prevSign !== null && prevSign !== signData.sign_index) {
+      triggers.push({
+        type: "moon_sign_entry",
+        source: "boundary_scan",
+        sign: signData.sign,
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: 0.92
+      });
+    }
+
+    if (prevNak !== null && prevNak !== nakData.nak_index) {
+      triggers.push({
+        type: "moon_nakshatra_entry",
+        source: "boundary_scan",
+        nakshatra: nakData.nakshatra,
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: 0.95
+      });
+    }
+
+    if (prevPada !== null && prevPada !== nakData.pada) {
+      triggers.push({
+        type: "moon_pada_entry",
+        source: "boundary_scan",
+        nakshatra: nakData.nakshatra,
+        pada: nakData.pada,
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: 0.88
+      });
+    }
+
+    const degreeGap = Math.abs(signData.degree - Math.round(signData.degree));
+    if (degreeGap <= 0.03) {
+      triggers.push({
+        type: "moon_degree_lock",
+        source: "boundary_scan",
+        degree: Math.round(signData.degree),
+        sign: signData.sign,
+        exact_time_utc: buildIsoFromOffset(baseDate, offset),
+        second_offset_from_snapshot: offset,
+        strength_score: round(1 - degreeGap / 0.03, 6)
+      });
+    }
+
+    prevSign = signData.sign_index;
+    prevNak = nakData.nak_index;
+    prevPada = nakData.pada;
+  }
+
+  return triggers;
 }
 
 function dedupeMicroTriggers(triggers) {
@@ -686,7 +621,9 @@ function dedupeMicroTriggers(triggers) {
     const key = [
       trigger.type || "",
       trigger.degree ?? "",
+      trigger.sign ?? "",
       trigger.nakshatra ?? "",
+      trigger.pada ?? "",
       trigger.aspect ?? "",
       trigger.planet1 ?? "",
       trigger.planet2 ?? "",
@@ -700,8 +637,8 @@ function dedupeMicroTriggers(triggers) {
   }
 
   return unique.sort((a, b) => {
-    const ta = safeParseIso(a.exact_time_utc)?.getTime() ?? 0;
-    const tb = safeParseIso(b.exact_time_utc)?.getTime() ?? 0;
+    const ta = new Date(a.exact_time_utc).getTime();
+    const tb = new Date(b.exact_time_utc).getTime();
     return ta - tb;
   });
 }
@@ -710,87 +647,25 @@ function buildTriggerSignature(trigger) {
   return [
     trigger.type || "",
     trigger.degree ?? "",
+    trigger.sign ?? "",
     trigger.nakshatra ?? "",
+    trigger.pada ?? "",
     trigger.aspect ?? "",
     trigger.planet1 ?? "",
     trigger.planet2 ?? ""
   ].join("|");
 }
 
-function clusterMicroTriggers(triggers) {
-  if (!triggers.length) {
-    return [];
-  }
-
-  const clusters = [];
-  let currentCluster = null;
-
-  for (const trigger of triggers) {
-    const time = safeParseIso(trigger.exact_time_utc);
-    if (!time) continue;
-
-    const signature = buildTriggerSignature(trigger);
-
-    if (!currentCluster) {
-      currentCluster = {
-        signature,
-        type: trigger.type || "unknown",
-        source: trigger.source || "unknown",
-        degree: trigger.degree ?? null,
-        nakshatra: trigger.nakshatra ?? null,
-        aspect: trigger.aspect ?? null,
-        planet1: trigger.planet1 ?? null,
-        planet2: trigger.planet2 ?? null,
-        cluster_start_utc: trigger.exact_time_utc,
-        cluster_end_utc: trigger.exact_time_utc,
-        items: [trigger]
-      };
-      continue;
-    }
-
-    const lastTime = safeParseIso(currentCluster.cluster_end_utc);
-    const secondsGap = lastTime ? (time.getTime() - lastTime.getTime()) / 1000 : 999999;
-
-    if (currentCluster.signature === signature && secondsGap <= 1.5) {
-      currentCluster.cluster_end_utc = trigger.exact_time_utc;
-      currentCluster.items.push(trigger);
-    } else {
-      clusters.push(finalizeCluster(currentCluster));
-      currentCluster = {
-        signature,
-        type: trigger.type || "unknown",
-        source: trigger.source || "unknown",
-        degree: trigger.degree ?? null,
-        nakshatra: trigger.nakshatra ?? null,
-        aspect: trigger.aspect ?? null,
-        planet1: trigger.planet1 ?? null,
-        planet2: trigger.planet2 ?? null,
-        cluster_start_utc: trigger.exact_time_utc,
-        cluster_end_utc: trigger.exact_time_utc,
-        items: [trigger]
-      };
-    }
-  }
-
-  if (currentCluster) {
-    clusters.push(finalizeCluster(currentCluster));
-  }
-
-  return clusters;
-}
-
 function finalizeCluster(cluster) {
-  const start = safeParseIso(cluster.cluster_start_utc);
-  const end = safeParseIso(cluster.cluster_end_utc);
-  const durationSeconds = start && end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000)) : 0;
+  const start = new Date(cluster.cluster_start_utc);
+  const end = new Date(cluster.cluster_end_utc);
+  const durationSeconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
 
   let peakItem = cluster.items[0];
   for (const item of cluster.items) {
     const currentScore = item.strength_score ?? 0;
     const bestScore = peakItem?.strength_score ?? 0;
-    if (currentScore > bestScore) {
-      peakItem = item;
-    }
+    if (currentScore > bestScore) peakItem = item;
   }
 
   const averageStrength =
@@ -799,8 +674,10 @@ function finalizeCluster(cluster) {
   return {
     type: cluster.type,
     source: cluster.source,
+    sign: cluster.sign,
     degree: cluster.degree,
     nakshatra: cluster.nakshatra,
+    pada: cluster.pada,
     aspect: cluster.aspect,
     planet1: cluster.planet1,
     planet2: cluster.planet2,
@@ -814,16 +691,70 @@ function finalizeCluster(cluster) {
   };
 }
 
+function clusterMicroTriggers(triggers) {
+  if (!triggers.length) return [];
+  const clusters = [];
+  let currentCluster = null;
+
+  for (const trigger of triggers) {
+    const signature = buildTriggerSignature(trigger);
+    const time = new Date(trigger.exact_time_utc);
+
+    if (!currentCluster) {
+      currentCluster = {
+        signature,
+        type: trigger.type || "unknown",
+        source: trigger.source || "unknown",
+        sign: trigger.sign ?? null,
+        degree: trigger.degree ?? null,
+        nakshatra: trigger.nakshatra ?? null,
+        pada: trigger.pada ?? null,
+        aspect: trigger.aspect ?? null,
+        planet1: trigger.planet1 ?? null,
+        planet2: trigger.planet2 ?? null,
+        cluster_start_utc: trigger.exact_time_utc,
+        cluster_end_utc: trigger.exact_time_utc,
+        items: [trigger]
+      };
+      continue;
+    }
+
+    const lastTime = new Date(currentCluster.cluster_end_utc);
+    const secondsGap = (time.getTime() - lastTime.getTime()) / 1000;
+
+    if (currentCluster.signature === signature && secondsGap <= 2) {
+      currentCluster.cluster_end_utc = trigger.exact_time_utc;
+      currentCluster.items.push(trigger);
+    } else {
+      clusters.push(finalizeCluster(currentCluster));
+      currentCluster = {
+        signature,
+        type: trigger.type || "unknown",
+        source: trigger.source || "unknown",
+        sign: trigger.sign ?? null,
+        degree: trigger.degree ?? null,
+        nakshatra: trigger.nakshatra ?? null,
+        pada: trigger.pada ?? null,
+        aspect: trigger.aspect ?? null,
+        planet1: trigger.planet1 ?? null,
+        planet2: trigger.planet2 ?? null,
+        cluster_start_utc: trigger.exact_time_utc,
+        cluster_end_utc: trigger.exact_time_utc,
+        items: [trigger]
+      };
+    }
+  }
+
+  if (currentCluster) clusters.push(finalizeCluster(currentCluster));
+  return clusters;
+}
+
 function getDominantCluster(clusters) {
   if (!clusters.length) return null;
 
   const ranked = [...clusters].sort((a, b) => {
-    if (b.peak_strength !== a.peak_strength) {
-      return b.peak_strength - a.peak_strength;
-    }
-    if (b.hit_count !== a.hit_count) {
-      return b.hit_count - a.hit_count;
-    }
+    if (b.peak_strength !== a.peak_strength) return b.peak_strength - a.peak_strength;
+    if (b.hit_count !== a.hit_count) return b.hit_count - a.hit_count;
     return b.average_strength - a.average_strength;
   });
 
@@ -870,11 +801,9 @@ export default async function handler(req, res) {
     const jupiter = calcPlanet(jd, swe.SE_JUPITER, flags);
     const saturn = calcPlanet(jd, swe.SE_SATURN, flags);
     const rahu = calcPlanet(jd, swe.SE_TRUE_NODE, flags);
-
     const ketuLongitude = normalize360(rahu.longitude + 180);
 
     const generatedAt = now.toISOString();
-    const snapshotAgeSeconds = 0;
 
     const result = {
       timestamp: generatedAt,
@@ -891,7 +820,7 @@ export default async function handler(req, res) {
       },
       freshness: {
         generated_at: generatedAt,
-        age_seconds: snapshotAgeSeconds,
+        age_seconds: 0,
         status: "LIVE"
       },
       integrity: {
@@ -933,10 +862,7 @@ export default async function handler(req, res) {
     result.kp_cusps = {};
     for (let i = 1; i <= 12; i++) {
       const rawValue = housesArray[i];
-
-      if (typeof rawValue !== "number" || Number.isNaN(rawValue)) {
-        continue;
-      }
+      if (typeof rawValue !== "number" || Number.isNaN(rawValue)) continue;
 
       const cuspLongitude = normalize360(rawValue);
       const signData = getSignData(cuspLongitude);
@@ -956,7 +882,7 @@ export default async function handler(req, res) {
 
     if (birthDateTime) {
       result.dasha = buildDashaContext(birthDateTime, now, flags);
-      result.divisional = buildDivisionalContext(birthDateTime, flags);
+      result.divisional = buildDivisionalContext(birthDateTime, lat, lon, flags);
     } else {
       result.dasha = {
         status: "absent_no_birth_datetime",
@@ -966,7 +892,7 @@ export default async function handler(req, res) {
       result.divisional = {
         status: "absent_no_birth_datetime",
         required_input: "birth_datetime",
-        supported: ["D9", "D10"]
+        supported: ["D7", "D9", "D10", "D12", "D24"]
       };
     }
 
@@ -990,7 +916,6 @@ export default async function handler(req, res) {
         const p1 = aspectKeys[i];
         const p2 = aspectKeys[j];
         const aspect = getAspect(planetLongitudes[p1], planetLongitudes[p2]);
-
         if (aspect) {
           aspects.push({
             planet1: p1,
@@ -1014,8 +939,8 @@ export default async function handler(req, res) {
     };
 
     const rawMicroTriggers = [
-      ...scanMicroTriggers(now, jd, flags),
-      ...detectUltraMicroTriggers(jd, flags, now)
+      ...buildMicroAspectTriggers(now, jd, flags),
+      ...buildMoonBoundaryTriggers(now, jd, flags)
     ];
 
     const dedupedMicroTriggers = dedupeMicroTriggers(rawMicroTriggers);
@@ -1023,7 +948,7 @@ export default async function handler(req, res) {
     const dominantCluster = getDominantCluster(microClusters);
 
     result.micro_window = {
-      scan_range_seconds: 300,
+      scan_range_seconds: 900,
       step_seconds: 1,
       raw_trigger_count: rawMicroTriggers.length,
       unique_trigger_count: dedupedMicroTriggers.length,
@@ -1051,8 +976,10 @@ export default async function handler(req, res) {
           hit_count: dominantCluster.hit_count,
           average_strength: dominantCluster.average_strength,
           peak_strength: dominantCluster.peak_strength,
+          sign: dominantCluster.sign,
           degree: dominantCluster.degree,
           nakshatra: dominantCluster.nakshatra,
+          pada: dominantCluster.pada,
           aspect: dominantCluster.aspect,
           planet1: dominantCluster.planet1,
           planet2: dominantCluster.planet2
@@ -1063,7 +990,6 @@ export default async function handler(req, res) {
     result.micro_triggers = dedupedMicroTriggers;
 
     return res.status(200).json(result);
-
   } catch (error) {
     return res.status(500).json({
       error: "transit_engine_failed",
