@@ -555,14 +555,14 @@ function detectUltraMicroTriggers(jd, flags, baseDate) {
     const diffMM = getAngularDifference(moon.longitude, mercury.longitude);
     const diffMMars = getAngularDifference(moon.longitude, mars.longitude);
 
-    if (Math.abs(diffMM - 90) < 0.01) {
+    if (Math.abs(diffMM - 90) < 0.05) {
       triggers.push({
         type: "moon_mercury_exact_square",
         exact_time: buildIsoFromOffset(baseDate, offset)
       });
     }
 
-    if (Math.abs(diffMMars - 90) < 0.01) {
+    if (Math.abs(diffMMars - 90) < 0.05) {
       triggers.push({
         type: "moon_mars_exact_square",
         exact_time: buildIsoFromOffset(baseDate, offset)
@@ -572,7 +572,7 @@ function detectUltraMicroTriggers(jd, flags, baseDate) {
     // 🔥 2. Nakshatra boundary hit
     const nak = getNakshatraData(moon.longitude);
 
-    if (nak.offset_in_nak < 0.01) {
+    if (nak.offset_in_nak < 0.05) {
       triggers.push({
         type: "moon_nakshatra_entry",
         nakshatra: nak.nakshatra,
@@ -581,7 +581,7 @@ function detectUltraMicroTriggers(jd, flags, baseDate) {
     }
 
     // 🔥 3. Degree hit (integer degree crossing)
-    if (Math.abs(moon.degree - Math.round(moon.degree)) < 0.01) {
+    if (Math.abs(moon.degree - Math.round(moon.degree)) < 0.05) {
       triggers.push({
         type: "moon_degree_lock",
         degree: Math.round(moon.degree),
