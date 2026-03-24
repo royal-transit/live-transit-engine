@@ -80,7 +80,38 @@ function buildEventInterpretation(data) {
       futureTone = "supportive / opening / blessing";
     }
   }
+if (data.timing_evidence?.dominant_trigger_identity === "moon_mars_square") {
+  presentManifestation =
+    "Emotional heat, confrontation pressure, reactive movement, or sharp inner agitation is active now.";
 
+  futureEventNature =
+    "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
+
+  futureTone = "conflict / heat / impulsive";
+  futureChannel = "emotion / confrontation / sudden action";
+}
+
+if (data.timing_evidence?.dominant_trigger_identity === "rahu_mercury_conjunction") {
+  presentManifestation =
+    "Hidden communication, mixed signals, paperwork distortion, or clever negotiation pressure is active now.";
+
+  futureEventNature =
+    "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
+
+  futureTone = "confusion / manipulation / clever offer";
+  futureChannel = "communication / deal / paperwork";
+}
+
+if (data.timing_evidence?.dominant_trigger_identity === "sun_saturn_conjunction") {
+  presentManifestation =
+    "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
+
+  futureEventNature =
+    "A duty-linked, authority-linked, or pressure-driven event is likely to crystallise through responsibility, formal contact, delay, or public weight.";
+
+  futureTone = "pressure / duty / delay";
+  futureChannel = "authority / structure / responsibility";
+}
   if (timing.trigger_present === true && timing.dominant_trigger_identity) {
     futureEventNature =
       `${futureEventNature} Present trigger is already live through ${timing.dominant_trigger_identity}.`;
