@@ -1,6 +1,9 @@
 export default async function handler(req, res) {
   try {
-    const response = await fetch("https://live-transit-engine.vercel.app/api/oracle");
+    // 🔥 FIX: use relative path instead of full URL
+    const baseUrl = `https://${req.headers.host}`;
+
+    const response = await fetch(`${baseUrl}/api/oracle`);
     const data = await response.json();
 
     const influences = data.analysis.influences;
@@ -51,21 +54,21 @@ export default async function handler(req, res) {
       timestamp: now.toISOString(),
       cycle_date: cycle_date,
 
-      signal: signal,
-      label: label,
-      score: score,
+      signal,
+      label,
+      score,
 
-      breakdown: breakdown,
-      influences: influences,
+      breakdown,
+      influences,
 
       meta: {
         version: "v6",
         confidence: Math.min(Math.max(score + 3, 0), 5),
         engine: "astro_signal_engine",
-        cycle_tag: ${cycle_date}_${signal}
+        cycle_tag: `${cycle_date}_${signal}`
       },
 
-      engine_status: "signal_engine_v6_cycle_ready"
+      engine_status: "signal_engine_v6_fixed"
     });
 
   } catch (error) {
