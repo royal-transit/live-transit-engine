@@ -8,21 +8,20 @@ export default async function handler(req, res) {
     let score = 0;
     let breakdown = [];
 
-    // 🔥 scoring system
-
+    // scoring
     if (influences.includes("knowledge expansion")) {
       score += 2;
-      breakdown.push("+2 knowledge expansion");
+      breakdown.push("+2 growth");
     }
 
     if (influences.includes("unconventional action")) {
       score += 1;
-      breakdown.push("+1 unconventional action");
+      breakdown.push("+1 action shift");
     }
 
     if (influences.includes("emotional stability + spiritual pull")) {
       score += 1;
-      breakdown.push("+1 emotional stability");
+      breakdown.push("+1 inner balance");
     }
 
     if (influences.includes("karmic pressure")) {
@@ -30,26 +29,30 @@ export default async function handler(req, res) {
       breakdown.push("-3 karmic pressure");
     }
 
-    // 🔥 signal decision based on score
+    // signal
     let signal = "NEUTRAL";
+    let label = "";
 
     if (score >= 2) {
       signal = "GO";
+      label = "Favourable window";
     } else if (score <= -1) {
       signal = "CAUTION";
+      label = "High resistance phase";
     }
 
     if (score >= 1 && score <= 2 && influences.includes("karmic pressure")) {
       signal = "WAIT";
+      label = "Hold and observe";
     }
 
     return res.status(200).json({
       timestamp: new Date().toISOString(),
       signal: signal,
+      label: label,
       score: score,
       breakdown: breakdown,
-      based_on: influences,
-      engine_status: "signal_engine_v3_score"
+      engine_status: "signal_engine_v4_client_ready"
     });
 
   } catch (error) {
