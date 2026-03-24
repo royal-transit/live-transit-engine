@@ -53,6 +53,23 @@ const MICRO_ASPECT_TARGETS = [
   { name: "opposition", angle: 180 }
 ];
 
+const DASHA_SEQUENCE = [
+  "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu",
+  "Jupiter", "Saturn", "Mercury"
+];
+
+const VIMSHOTTARI_YEARS = {
+  Ketu: 7,
+  Venus: 20,
+  Sun: 6,
+  Moon: 10,
+  Mars: 7,
+  Rahu: 18,
+  Jupiter: 16,
+  Saturn: 19,
+  Mercury: 17
+};
+
 function normalize360(value) {
   let result = value % 360;
   if (result < 0) result += 360;
@@ -83,7 +100,10 @@ function getNakshatraData(longitude) {
   return {
     nakshatra: NAKSHATRAS[nakIndex],
     nakshatra_lord: NAK_LORDS[nakIndex],
-    pada
+    pada,
+    nak_index: nakIndex,
+    offset_in_nak: normalized % nakSize,
+    nak_size: nakSize
   };
 }
 
@@ -301,6 +321,33 @@ function scanMicroTriggers(baseDate, jd, flags) {
   return triggers;
 }
 
+function getSubLord(longitude) {
+  const nak = getNakshatraData(longitude);
+  const startLord = nak.nakshatra_lord;
+  const startIndex = DASHA_SEQUENCE.indexOf(startLord);
+
+  if (startIndex === -1) {
+    return startLord;
+  }
+
+  const nakSize = nak.nak_size;
+  const offset = nak.offset_in_nak;
+
+  let cumulative = 0;
+
+  for (let i = 0; i < DASHA_SEQUENCE.length; i++) {
+    const lord = DASHA_SEQUENCE[(startIndex + i) % DASHA_SEQUENCE.length];
+    const segmentSize = nakSize * (VIMSHOTTARI_YEARS[lord] / 120);
+    cumulative += segmentSize;
+
+    if (offset <= cumulative + 1e-10) {
+      return lord;
+    }
+  }
+
+  return startLord;
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
@@ -402,16 +449,23 @@ export default async function handler(req, res) {
 
     result.kp_cusps = {};
     for (let i = 1; i <= 12; i++) {
-      const cuspLongitude = normalize360(housesArray[i]);
+      const rawValue = housesArray[i];
+
+      if (typeof rawValue !== "number" || Number.isNaN(rawValue)) {
+        continue;
+      }
+
+      const cuspLongitude = normalize360(rawValue);
       const signData = getSignData(cuspLongitude);
       const nakData = getNakshatraData(cuspLongitude);
+      const subLord = getSubLord(cuspLongitude);
 
       result.kp_cusps[i] = {
         longitude: round(cuspLongitude, 6),
         sign: signData.sign,
         degree: signData.degree,
         star_lord: nakData.nakshatra_lord,
-        sub_lord: nakData.nakshatra_lord
+        sub_lord: subLord
       };
     }
 
