@@ -343,8 +343,11 @@ export default async function handler(req, res) {
 
     const ketuLongitude = normalize360(rahu.longitude + 180);
 
+    const generatedAt = now.toISOString();
+    const snapshotAgeSeconds = 0;
+
     const result = {
-      timestamp: now.toISOString(),
+      timestamp: generatedAt,
       authority: {
         source: "Swiss Ephemeris",
         zodiac: "sidereal",
@@ -355,6 +358,15 @@ export default async function handler(req, res) {
         q_grade: "Q3",
         timing_precision: "live_degree_level",
         integrity_status: "clean_single_source"
+      },
+      freshness: {
+        generated_at: generatedAt,
+        age_seconds: snapshotAgeSeconds,
+        status: "LIVE"
+      },
+      integrity: {
+        status: "CLEAN",
+        issues: []
       },
       location_used: {
         latitude: round(lat, 6),
@@ -438,6 +450,11 @@ export default async function handler(req, res) {
       step_seconds: 1,
       trigger_count: microTriggers.length,
       precision_mode: "ultra_micro_scan"
+    };
+
+    result.micro_status = {
+      trigger_present: microTriggers.length > 0,
+      precision_allowed: microTriggers.length > 0 ? "minute_candidate" : "window_only"
     };
 
     result.micro_triggers = microTriggers;
