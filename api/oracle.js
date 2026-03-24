@@ -1,86 +1,47 @@
-import { calculateConfidence } from "./confidence";
-
 export default async function handler(req, res) {
   try {
-    const protocol = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers.host;
-    const baseUrl = `${protocol}://${host}`;
+    const base = "https://live-transit-engine.vercel.app";
 
-    const birthDateTime = req.query?.birth_datetime || null;
+    // 1. fetch transit
+    const transitRes = await fetch(`${base}/api/transit`);
+    const transit = await transitRes.json();
 
-    const transitUrl = birthDateTime
-      ? `${baseUrl}/api/transit?birth_datetime=${encodeURIComponent(birthDateTime)}`
-      : `${baseUrl}/api/transit`;
+    // 2. fetch multi snapshot
+    const multiRes = await fetch(`${base}/api/multi-snapshot`);
+    const multi = await multiRes.json();
 
-    const multiSnapshotUrl = birthDateTime
-      ? `${baseUrl}/api/multi-snapshot?birth_datetime=${encodeURIComponent(birthDateTime)}`
-      : `${baseUrl}/api/multi-snapshot`;
-
-    const transitResponse = await fetch(transitUrl);
-    const packet = await transitResponse.json();
-
-    const multiSnapshotResponse = await fetch(multiSnapshotUrl);
-    const multiSnapshot = await multiSnapshotResponse.json();
-
-    const moonSign = packet?.moon?.sign || null;
-    const sunSign = packet?.sun?.sign || null;
-    const saturnSign = packet?.saturn?.sign || null;
-    const jupiterSign = packet?.jupiter?.sign || null;
-    const marsSign = packet?.mars?.sign || null;
-
-    let influences = [];
-
-    if (moonSign === "Taurus" && sunSign === "Pisces") {
-      influences.push("emotional stability + spiritual pull");
+    // 3. fetch confidence (optional)
+    let confidence = null;
+    try {
+      const confRes = await fetch(`${base}/api/confidence`);
+      confidence = await confRes.json();
+    } catch (e) {
+      confidence = { status: "confidence_unavailable" };
     }
 
-    if (saturnSign === "Pisces") {
-      influences.push("karmic pressure");
-    }
-
-    if (jupiterSign === "Gemini") {
-      influences.push("knowledge expansion");
-    }
-
-    if (marsSign === "Aquarius") {
-      influences.push("unconventional action");
-    }
-
-    const confidence = calculateConfidence(packet, multiSnapshot);
-
+    // 4. merge
     return res.status(200).json({
+      endpoint_called: "oracle.js",
+
       timestamp: new Date().toISOString(),
-      source: "live_transit_api",
-      planets: {
-        moon: moonSign,
-        sun: sunSign,
-        saturn: saturnSign,
-        jupiter: jupiterSign,
-        mars: marsSign
-      },
-      analysis: {
-        influences: influences,
-        summary: influences.length ? influences.join(" | ") : "no major structured influence detected"
-      },
+
+      transit_packet: transit,
+      multi_snapshot: multi,
       confidence: confidence,
-      transit_packet_status: {
-        dasha: packet?.dasha?.status || null,
-        divisional: packet?.divisional?.status || null,
-        micro_precision: packet?.micro_status?.precision_allowed || null
+
+      oracle_summary: {
+        convergence: multi?.convergence_strength || "unknown",
+        micro_trigger: multi?.micro_status?.trigger_present || false,
+        precision: multi?.micro_status?.precision_allowed || "unknown"
       },
-      multi_snapshot: {
-        snapshot_count: multiSnapshot?.snapshot_count || 0,
-        active_trigger_snapshots: multiSnapshot?.active_trigger_snapshots || 0,
-        convergence_strength: multiSnapshot?.convergence_strength || "low",
-        dominant_trigger_identity: multiSnapshot?.dominant_trigger_identity || null
-      },
-      engine_status: "oracle_structured_v4_confidence_live"
+
+      engine_status: "oracle_merged_v1"
     });
 
   } catch (error) {
     return res.status(500).json({
       status: "oracle_failed",
-      message: error.message
+      error: error.message
     });
   }
 }
