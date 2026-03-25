@@ -284,7 +284,6 @@ function classifyTriggerDomains(data) {
       (a.planet1 === "Jupiter" && a.planet2 === "Venus")
   );
 
-  // Dominant trigger first
   if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
     addWeight(scores, "relationship", 3);
     addWeight(scores, "movement", 3);
@@ -310,7 +309,6 @@ function classifyTriggerDomains(data) {
     addWeight(scores, "movement", 1);
   }
 
-  // Aspect family support
   if (hasRahuMercury) {
     addWeight(scores, "communication", 3);
     addWeight(scores, "money", 1);
@@ -332,7 +330,6 @@ function classifyTriggerDomains(data) {
     addWeight(scores, "money", 1);
   }
 
-  // Future candidate support
   const futurePair = futureCandidate?.details?.pair || "";
   if (typeof futurePair === "string") {
     if (futurePair.includes("Mercury")) addWeight(scores, "communication", 2);
@@ -357,7 +354,143 @@ function classifyTriggerDomains(data) {
 }
 
 // ==============================
-// PHASE 2:
+// PHASE 4:
+// DOMAIN-AWARE WORDING LOCK
+// ==============================
+
+function buildDomainNarrative(domain, mode = "future") {
+  const copy = {
+    money: {
+      present:
+        "Money-related movement, release pressure, payment expectation, or value-linked activity is building now.",
+      future:
+        "A money-linked event is likely to take shape through payment, inflow, release, pricing, or deal-value movement."
+    },
+    communication: {
+      present:
+        "A communication field is opening through message pressure, reply expectation, negotiation, contact, or paperwork movement.",
+      future:
+        "A communication-linked event is likely to form through message, reply, proposal, deal-talk, contact, or document activity."
+    },
+    authority: {
+      present:
+        "Authority pressure, formal structure, responsibility, review, or duty-linked weight is active in the field now.",
+      future:
+        "An authority-linked development is likely to form through duty, formal contact, approval pressure, delay, or responsibility."
+    },
+    relationship: {
+      present:
+        "An emotional or relational field is active now through contact-opening, feeling shift, attention, response, or human closeness.",
+      future:
+        "A relationship-linked development is likely to unfold through contact, emotional movement, response, closeness, or renewed attention."
+    },
+    conflict: {
+      present:
+        "Pressure, irritation, friction, or confrontation energy is active now and can push a situation toward reaction.",
+      future:
+        "A conflict-linked development is likely to emerge through pressure, disagreement, sharp reaction, argument, or heated movement."
+    },
+    movement: {
+      present:
+        "Movement, travel, dispatch, transition, or active change in pace is building now in practical life.",
+      future:
+        "A movement-linked event is likely to unfold through travel, dispatch, relocation, fast response, or situational shift."
+    },
+    support: {
+      present:
+        "A supportive field is active now through help, alignment, easing, opening, or cooperative energy.",
+      future:
+        "A supportive development is likely to form through help, alliance, grace, opportunity, easing, or beneficial alignment."
+    },
+    spiritual: {
+      present:
+        "An inward, intuitive, or spiritually sensitive field is active now and can shape perception, receptivity, or reflection.",
+      future:
+        "A spiritually-toned or inward development is likely to unfold through reflection, subtle response, intuition, or inner opening."
+    },
+    general: {
+      present:
+        "A general event-field is active now, but the signal is not yet sharply narrowed to a single domain.",
+      future:
+        "A general future event is building, but the domain is not yet sharply narrowed."
+    }
+  };
+
+  return copy[domain]?.[mode] || copy.general[mode];
+}
+
+function buildFutureToneFromDomain(domain, dominantTrigger) {
+  const toneMap = {
+    money: "release / gain / value movement",
+    communication: "message / negotiation / paperwork movement",
+    authority: "formal / delayed / duty-weighted",
+    relationship: "responsive / emotional / contact-opening",
+    conflict: "heated / sharp / pressurised",
+    movement: "active / shifting / fast-paced",
+    support: "easing / helpful / aligned",
+    spiritual: "subtle / inward / intuitive",
+    general: "developing / transitional / mixed"
+  };
+
+  if (
+    dominantTrigger === "rahu_mercury_conjunction" ||
+    dominantTrigger === "aspect_approach_timing"
+  ) {
+    return "clever / message-driven / developing";
+  }
+
+  if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
+    return "fresh / responsive / immediate";
+  }
+
+  if (dominantTrigger === "moon_mars_square") {
+    return "heated / urgent / reactive";
+  }
+
+  if (dominantTrigger === "sun_saturn_conjunction") {
+    return "formal / pressured / duty-bound";
+  }
+
+  return toneMap[domain] || toneMap.general;
+}
+
+function buildFutureChannelFromDomain(domain, dominantTrigger) {
+  const channelMap = {
+    money: "money / payment / release / value",
+    communication: "communication / deal / paperwork / reply",
+    authority: "authority / structure / duty / approval",
+    relationship: "emotion / response / contact / closeness",
+    conflict: "pressure / argument / confrontation / friction",
+    movement: "movement / travel / dispatch / shift",
+    support: "support / alliance / help / opportunity",
+    spiritual: "inner field / intuition / reflection",
+    general: "general life field"
+  };
+
+  if (
+    dominantTrigger === "rahu_mercury_conjunction" ||
+    dominantTrigger === "aspect_approach_timing"
+  ) {
+    return "communication / proposal / paperwork / signal";
+  }
+
+  if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
+    return "emotion / opening / movement / contact";
+  }
+
+  if (dominantTrigger === "moon_mars_square") {
+    return "emotion / confrontation / sudden action";
+  }
+
+  if (dominantTrigger === "sun_saturn_conjunction") {
+    return "authority / structure / responsibility";
+  }
+
+  return channelMap[domain] || channelMap.general;
+}
+
+// ==============================
+// PHASE 2 + 4:
 // DOMINANT TRIGGER LOCKED INTERPRETATION
 // ==============================
 
@@ -384,6 +517,8 @@ function buildEventInterpretation(data) {
     triggerScan?.dominant_trigger?.details?.dominant_trigger_identity ||
     triggerScan?.dominant_trigger?.kind ||
     null;
+
+  const dominantDomain = domainHint?.dominant_domain || "general";
 
   const hasRahuMercury = aspects.some(
     (a) =>
@@ -448,6 +583,16 @@ function buildEventInterpretation(data) {
     futureTone = "pressure / duty / delay";
     pastPattern =
       "A similar cycle likely brought duty, delay, formal pressure, burden, or authority-linked heaviness before.";
+  } else if (
+    dominantTrigger === "aspect_approach_timing" ||
+    predictive?.best_future_candidate?.predicted_time_utc
+  ) {
+    presentManifestation = buildDomainNarrative(dominantDomain, "present");
+    futureEventNature = buildDomainNarrative(dominantDomain, "future");
+    futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
+    futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
+    pastPattern =
+      `A similar pattern likely unfolded before in the ${dominantDomain} domain when a related trigger structure matured.`;
   } else if (dominantTrigger === "live_current_trigger") {
     presentManifestation =
       "A present trigger is already live and is actively shaping the immediate event-field.";
@@ -499,29 +644,20 @@ function buildEventInterpretation(data) {
     }
   }
 
-  if (domainHint?.dominant_domain && domainHint.dominant_domain !== "general") {
+  if (
+    timing.trigger_present === false &&
+    predictive?.best_future_candidate?.predicted_time_utc &&
+    dominantDomain !== "general"
+  ) {
     futureEventNature =
-      `${futureEventNature} Dominant domain emphasis now falls under ${domainHint.dominant_domain}.`;
+      `${buildDomainNarrative(dominantDomain, "future")} The projected trigger is building toward activation.`;
+    futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
+    futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
   }
 
   if (timing.trigger_present === true && dominantTrigger) {
     futureEventNature =
       `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
-  }
-
-  if (
-    timing.trigger_present === false &&
-    predictive?.best_future_candidate?.predicted_time_utc
-  ) {
-    futureEventNature =
-      "A future trigger is forming and is likely to produce a real-world event once the projected trigger matures.";
-    futureChannel =
-      predictive?.best_future_candidate?.details?.pair ||
-      predictive?.best_future_candidate?.kind ||
-      futureChannel;
-    futureTone =
-      predictive?.best_future_candidate?.reason ||
-      "future trigger building";
   }
 
   if (dasha?.status === "active" && divisional?.status === "active") {
@@ -895,6 +1031,7 @@ export default async function handler(req, res) {
 
     const fullScan = fullTriggerScan(finalOutput);
     finalOutput.trigger_scan = fullScan;
+
     finalOutput.three_day_phase_map = buildThreeDayPhaseMap({
       ...finalOutput,
       trigger_scan: fullScan
@@ -933,7 +1070,7 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v4";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v5";
     finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
