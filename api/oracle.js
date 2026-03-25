@@ -223,6 +223,140 @@ function buildThreeDayPhaseMap(data) {
 }
 
 // ==============================
+// PHASE 3:
+// DOMAIN HINT + TRIGGER FAMILY
+// ==============================
+
+function normalizeDomainScoreMap() {
+  return {
+    money: 0,
+    communication: 0,
+    authority: 0,
+    relationship: 0,
+    conflict: 0,
+    movement: 0,
+    support: 0,
+    spiritual: 0
+  };
+}
+
+function addWeight(map, key, weight) {
+  if (!Object.prototype.hasOwnProperty.call(map, key)) return;
+  map[key] += weight;
+}
+
+function classifyTriggerDomains(data) {
+  const aspects = Array.isArray(data?.aspects_summary) ? data.aspects_summary : [];
+  const timing = data?.timing_evidence || {};
+  const triggerScan = data?.trigger_scan || {};
+  const predictive = data?.predictive_smart_mode || {};
+  const scores = normalizeDomainScoreMap();
+
+  const dominantTrigger =
+    timing?.dominant_trigger_identity ||
+    triggerScan?.dominant_trigger?.details?.dominant_trigger_identity ||
+    triggerScan?.dominant_trigger?.kind ||
+    null;
+
+  const futureCandidate = predictive?.best_future_candidate || null;
+
+  const hasRahuMercury = aspects.some(
+    (a) =>
+      (a.planet1 === "Mercury" && a.planet2 === "Rahu") ||
+      (a.planet1 === "Rahu" && a.planet2 === "Mercury")
+  );
+
+  const hasMoonMars = aspects.some(
+    (a) =>
+      (a.planet1 === "Moon" && a.planet2 === "Mars") ||
+      (a.planet1 === "Mars" && a.planet2 === "Moon")
+  );
+
+  const hasSunSaturn = aspects.some(
+    (a) =>
+      (a.planet1 === "Sun" && a.planet2 === "Saturn") ||
+      (a.planet1 === "Saturn" && a.planet2 === "Sun")
+  );
+
+  const hasVenusJupiter = aspects.some(
+    (a) =>
+      (a.planet1 === "Venus" && a.planet2 === "Jupiter") ||
+      (a.planet1 === "Jupiter" && a.planet2 === "Venus")
+  );
+
+  // Dominant trigger first
+  if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
+    addWeight(scores, "relationship", 3);
+    addWeight(scores, "movement", 3);
+    addWeight(scores, "communication", 2);
+    addWeight(scores, "spiritual", 1);
+  }
+
+  if (dominantTrigger === "moon_mars_square") {
+    addWeight(scores, "conflict", 4);
+    addWeight(scores, "movement", 2);
+    addWeight(scores, "relationship", 1);
+  }
+
+  if (dominantTrigger === "rahu_mercury_conjunction") {
+    addWeight(scores, "communication", 4);
+    addWeight(scores, "money", 2);
+    addWeight(scores, "movement", 1);
+  }
+
+  if (dominantTrigger === "sun_saturn_conjunction") {
+    addWeight(scores, "authority", 4);
+    addWeight(scores, "conflict", 1);
+    addWeight(scores, "movement", 1);
+  }
+
+  // Aspect family support
+  if (hasRahuMercury) {
+    addWeight(scores, "communication", 3);
+    addWeight(scores, "money", 1);
+  }
+
+  if (hasMoonMars) {
+    addWeight(scores, "conflict", 3);
+    addWeight(scores, "movement", 2);
+  }
+
+  if (hasSunSaturn) {
+    addWeight(scores, "authority", 3);
+    addWeight(scores, "conflict", 1);
+  }
+
+  if (hasVenusJupiter) {
+    addWeight(scores, "support", 3);
+    addWeight(scores, "relationship", 2);
+    addWeight(scores, "money", 1);
+  }
+
+  // Future candidate support
+  const futurePair = futureCandidate?.details?.pair || "";
+  if (typeof futurePair === "string") {
+    if (futurePair.includes("Mercury")) addWeight(scores, "communication", 2);
+    if (futurePair.includes("Rahu")) addWeight(scores, "communication", 1);
+    if (futurePair.includes("Mars")) addWeight(scores, "conflict", 2);
+    if (futurePair.includes("Moon")) addWeight(scores, "relationship", 1);
+    if (futurePair.includes("Sun") || futurePair.includes("Saturn")) addWeight(scores, "authority", 1);
+    if (futurePair.includes("Venus") || futurePair.includes("Jupiter")) addWeight(scores, "support", 1);
+  }
+
+  const rankedDomains = Object.entries(scores)
+    .sort((a, b) => b[1] - a[1])
+    .filter(([, value]) => value > 0)
+    .map(([domain, value]) => ({ domain, score: value }));
+
+  return {
+    dominant_domain: rankedDomains[0]?.domain || "general",
+    secondary_domain: rankedDomains[1]?.domain || null,
+    ranked_domains: rankedDomains,
+    trigger_family: dominantTrigger || "unknown_trigger_family"
+  };
+}
+
+// ==============================
 // PHASE 2:
 // DOMINANT TRIGGER LOCKED INTERPRETATION
 // ==============================
@@ -234,6 +368,7 @@ function buildEventInterpretation(data) {
   const dasha = data?.dasha || {};
   const divisional = data?.divisional || {};
   const triggerScan = data?.trigger_scan || {};
+  const domainHint = data?.domain_hint || {};
 
   let pastPattern =
     "Pattern suggests a similar karmic cycle or event-family was activated before under a related trigger structure.";
@@ -274,7 +409,6 @@ function buildEventInterpretation(data) {
       (a.planet1 === "Jupiter" && a.planet2 === "Venus")
   );
 
-  // HARD OVERRIDE BASED ON DOMINANT TRIGGER
   if (
     dominantTrigger === "moon_nakshatra_entry" ||
     dominantTrigger === "moon_degree_lock"
@@ -322,7 +456,6 @@ function buildEventInterpretation(data) {
     futureChannel = "live trigger / immediate field";
     futureTone = "active / immediate";
   } else {
-    // FALLBACK ONLY IF NO DOMINANT TRIGGER LOCK MATCHED
     if (hasRahuMercury) {
       presentManifestation =
         "Hidden communication, mixed signals, clever negotiation, paperwork distortion, or deal-confusion environment is active.";
@@ -364,6 +497,11 @@ function buildEventInterpretation(data) {
         futureTone = "supportive / opening / blessing";
       }
     }
+  }
+
+  if (domainHint?.dominant_domain && domainHint.dominant_domain !== "general") {
+    futureEventNature =
+      `${futureEventNature} Dominant domain emphasis now falls under ${domainHint.dominant_domain}.`;
   }
 
   if (timing.trigger_present === true && dominantTrigger) {
@@ -436,13 +574,15 @@ function buildOracleVerdict(data) {
   const timing = data?.timing_evidence || {};
   const decision = data?.timing_decision || {};
   const predictive = data?.predictive_smart_mode || {};
+  const domainHint = data?.domain_hint || {};
 
   if (timing.trigger_present === true && decision?.exact_time_candidate_utc) {
     return {
       outcome: "EXACT",
       event_state: "ACTIVE_TRIGGER",
       best_actionable_time_utc: decision.exact_time_candidate_utc,
-      best_actionable_mode: "PRESENT_TRIGGER"
+      best_actionable_mode: "PRESENT_TRIGGER",
+      dominant_domain: domainHint?.dominant_domain || "general"
     };
   }
 
@@ -451,7 +591,8 @@ function buildOracleVerdict(data) {
       outcome: "PREDICTIVE",
       event_state: "FUTURE_TRIGGER",
       best_actionable_time_utc: predictive.best_future_candidate.predicted_time_utc,
-      best_actionable_mode: "PREDICTIVE"
+      best_actionable_mode: "PREDICTIVE",
+      dominant_domain: domainHint?.dominant_domain || "general"
     };
   }
 
@@ -459,7 +600,8 @@ function buildOracleVerdict(data) {
     outcome: "WINDOW",
     event_state: "LOW_ACTIVITY",
     best_actionable_time_utc: null,
-    best_actionable_mode: "WAIT"
+    best_actionable_mode: "WAIT",
+    dominant_domain: domainHint?.dominant_domain || "general"
   };
 }
 
@@ -758,9 +900,15 @@ export default async function handler(req, res) {
       trigger_scan: fullScan
     });
 
-    finalOutput.event_interpretation = buildEventInterpretation({
+    finalOutput.domain_hint = classifyTriggerDomains({
       ...finalOutput,
       trigger_scan: fullScan
+    });
+
+    finalOutput.event_interpretation = buildEventInterpretation({
+      ...finalOutput,
+      trigger_scan: fullScan,
+      domain_hint: finalOutput.domain_hint
     });
 
     finalOutput.confidence = buildConfidenceEnhanced(
@@ -768,7 +916,10 @@ export default async function handler(req, res) {
       finalOutput
     );
 
-    finalOutput.oracle_verdict = buildOracleVerdict(finalOutput);
+    finalOutput.oracle_verdict = buildOracleVerdict({
+      ...finalOutput,
+      domain_hint: finalOutput.domain_hint
+    });
 
     if (finalOutput?.predictive_smart_mode) {
       finalOutput.predictive_smart_mode.predictive_status =
@@ -782,7 +933,7 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v3";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v4";
     finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
