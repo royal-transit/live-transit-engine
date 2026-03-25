@@ -507,9 +507,10 @@ function buildFutureToneFromDomain(domain, dominantTrigger) {
 
   if (
     dominantTrigger === "rahu_mercury_conjunction" ||
-    dominantTrigger === "aspect_approach_timing"
+    dominantTrigger === "aspect_approach_timing" ||
+    dominantTrigger === "multi_snapshot_predictive_merge"
   ) {
-    return "clever / message-driven / developing";
+    return "message / negotiation / paperwork movement";
   }
 
   if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
@@ -542,9 +543,10 @@ function buildFutureChannelFromDomain(domain, dominantTrigger) {
 
   if (
     dominantTrigger === "rahu_mercury_conjunction" ||
-    dominantTrigger === "aspect_approach_timing"
+    dominantTrigger === "aspect_approach_timing" ||
+    dominantTrigger === "multi_snapshot_predictive_merge"
   ) {
-    return "communication / proposal / paperwork / signal";
+    return "communication / deal / paperwork / reply";
   }
 
   if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
@@ -563,7 +565,39 @@ function buildFutureChannelFromDomain(domain, dominantTrigger) {
 }
 
 // ==============================
-// PHASE 2 + 4:
+// PHASE 6:
+// COMMUNICATION -> MONEY BRIDGE
+// ==============================
+
+function getDomainScore(domainHint, name) {
+  if (!domainHint?.ranked_domains || !Array.isArray(domainHint.ranked_domains)) return 0;
+  const found = domainHint.ranked_domains.find((item) => item.domain === name);
+  return found?.score || 0;
+}
+
+function buildCommunicationMoneyOverlay(domainHint) {
+  const dominantDomain = domainHint?.dominant_domain || "general";
+  const moneyScore = getDomainScore(domainHint, "money");
+  const communicationScore = getDomainScore(domainHint, "communication");
+
+  if (dominantDomain !== "communication") return null;
+  if (moneyScore <= 0) return null;
+  if (communicationScore <= 0) return null;
+
+  return {
+    present:
+      "A communication field is opening through message pressure, customer response, negotiation, order-talk, contact, or paperwork movement with money relevance underneath.",
+    future:
+      "A communication-linked event is likely to form through message, reply, proposal, deal-talk, customer contact, order activity, or paperwork that can lead toward payment or money release.",
+    channel:
+      "communication / order / deal / paperwork / payment path",
+    tone:
+      "message / negotiation / paperwork / money-link"
+  };
+}
+
+// ==============================
+// PHASE 2 + 4 + 6:
 // INTERPRETATION
 // ==============================
 
@@ -592,6 +626,7 @@ function buildEventInterpretation(data) {
     null;
 
   const dominantDomain = domainHint?.dominant_domain || "general";
+  const communicationMoneyOverlay = buildCommunicationMoneyOverlay(domainHint);
 
   const hasRahuMercury = aspects.some(
     (a) =>
@@ -626,7 +661,7 @@ function buildEventInterpretation(data) {
     futureEventNature =
       "A new lived phase is opening through contact, emotional shift, movement, response, or a fresh unfolding event tied to the present lunar trigger.";
     futureChannel = "emotion / opening / movement / contact";
-    futureTone = "fresh / immediate / responsive";
+    futureTone = "fresh / responsive / immediate";
     pastPattern =
       "A similar lunar opening likely marked the beginning of a noticeable emotional, contact-based, or movement-linked phase before.";
   } else if (dominantTrigger === "moon_mars_square") {
@@ -644,7 +679,7 @@ function buildEventInterpretation(data) {
     futureEventNature =
       "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
     futureChannel = "communication / deal / paperwork";
-    futureTone = "clever / message-driven / developing";
+    futureTone = "message / negotiation / paperwork movement";
     pastPattern =
       "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
   } else if (dominantTrigger === "sun_saturn_conjunction") {
@@ -658,17 +693,26 @@ function buildEventInterpretation(data) {
       "A similar cycle likely brought duty, delay, formal pressure, burden, or authority-linked heaviness before.";
   } else if (
     dominantTrigger === "aspect_approach_timing" ||
+    dominantTrigger === "multi_snapshot_predictive_merge" ||
     predictive?.best_future_candidate?.predicted_time_utc
   ) {
-    presentManifestation = buildDomainNarrative(dominantDomain, "present");
-    futureEventNature = `${buildDomainNarrative(
-      dominantDomain,
-      "future"
-    )} The projected trigger is building toward activation.`;
-    futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
-    futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
-    pastPattern =
-      `A similar pattern likely unfolded before in the ${dominantDomain} domain when a related trigger structure matured.`;
+    if (communicationMoneyOverlay) {
+      presentManifestation = communicationMoneyOverlay.present;
+      futureEventNature =
+        `${communicationMoneyOverlay.future} The projected trigger is building toward activation.`;
+      futureChannel = communicationMoneyOverlay.channel;
+      futureTone = communicationMoneyOverlay.tone;
+      pastPattern =
+        "A similar pattern likely unfolded before through communication, order-talk, customer response, or deal-flow that later connected to money movement.";
+    } else {
+      presentManifestation = buildDomainNarrative(dominantDomain, "present");
+      futureEventNature =
+        `${buildDomainNarrative(dominantDomain, "future")} The projected trigger is building toward activation.`;
+      futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
+      futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
+      pastPattern =
+        `A similar pattern likely unfolded before in the ${dominantDomain} domain when a related trigger structure matured.`;
+    }
   } else if (dominantTrigger === "live_current_trigger") {
     presentManifestation =
       "A present trigger is already live and is actively shaping the immediate event-field.";
@@ -683,7 +727,7 @@ function buildEventInterpretation(data) {
       futureEventNature =
         "A message, proposal, contact, or decision-linked communication is likely to emerge with a hidden twist, trap, or layered meaning.";
       futureChannel = "communication / deal / paperwork";
-      futureTone = "clever / message-driven / developing";
+      futureTone = "message / negotiation / paperwork movement";
       pastPattern =
         "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
     }
@@ -717,6 +761,13 @@ function buildEventInterpretation(data) {
         futureChannel = "support / alliance / opportunity";
         futureTone = "easing / helpful / aligned";
       }
+    }
+
+    if (communicationMoneyOverlay && futureChannel.includes("communication")) {
+      presentManifestation = communicationMoneyOverlay.present;
+      futureEventNature = communicationMoneyOverlay.future;
+      futureChannel = communicationMoneyOverlay.channel;
+      futureTone = communicationMoneyOverlay.tone;
     }
   }
 
@@ -1139,7 +1190,7 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v6";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v7";
     finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
