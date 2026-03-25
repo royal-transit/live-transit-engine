@@ -597,6 +597,64 @@ function buildCommunicationMoneyOverlay(domainHint) {
 }
 
 // ==============================
+// PHASE 7:
+// PACKET COMPLIANCE BLOCK
+// ==============================
+
+function buildComplianceBlock(data) {
+  const timing = data?.timing_evidence || {};
+  const domainHint = data?.domain_hint || {};
+  const interpretation = data?.event_interpretation || {};
+  const confidence = data?.confidence || {};
+  const threeDay = data?.three_day_phase_map || null;
+
+  return {
+    calculation_authority: {
+      source: data?.authority?.source || "Swiss Ephemeris",
+      ayanamsa: data?.authority?.ayanamsa || "Lahiri",
+      zodiac: data?.authority?.zodiac || "Sidereal",
+      integrity_status: data?.integrity?.status || "UNKNOWN",
+      export_type: "ORACLE_STRUCTURED_PACKET",
+      packet_grade: "COMPLIANT"
+    },
+
+    evidence_normalisation: {
+      natal_layer: data?.dasha?.status === "active" ? "AVAILABLE" : "LIMITED",
+      divisional_layer: data?.divisional?.status === "active" ? "STRONG" : "WEAK",
+      transit_layer: "ACTIVE",
+      kp_micro_timing: timing?.precision_allowed || "WINDOW",
+      convergence_strength: timing?.convergence_strength || "LOW",
+      dominant_domain: domainHint?.dominant_domain || "general",
+      secondary_domain: domainHint?.secondary_domain || null
+    },
+
+    execution_context: {
+      context_type: domainHint?.dominant_domain || "general",
+      channel_type: interpretation?.future_channel || "general",
+      execution_status:
+        timing?.trigger_present === true ? "ACTIVE" : "PENDING_TRIGGER",
+      permission_status:
+        data?.dasha?.status === "active" ? "OPEN" : "LIMITED",
+      route_status:
+        timing?.trigger_present === true ? "DIRECT" : "FORMING_ROUTE",
+      manifestation_form:
+        interpretation?.future_tone || "UNDEFINED"
+    },
+
+    fate_structure: {
+      fate_gate:
+        timing?.trigger_present === true ? "OPEN" : "FORMING",
+      execution_strength: confidence?.confidence_level || "MEDIUM",
+      authority_planet:
+        timing?.dominant_trigger_identity ||
+        domainHint?.trigger_family ||
+        "UNKNOWN",
+      event_radar: threeDay
+    }
+  };
+}
+
+// ==============================
 // PHASE 2 + 4 + 6:
 // INTERPRETATION
 // ==============================
@@ -1178,6 +1236,13 @@ export default async function handler(req, res) {
       domain_hint: finalOutput.domain_hint
     });
 
+    finalOutput.compliance_block = buildComplianceBlock({
+      ...finalOutput,
+      event_interpretation: finalOutput.event_interpretation,
+      domain_hint: finalOutput.domain_hint,
+      three_day_phase_map: finalOutput.three_day_phase_map
+    });
+
     if (finalOutput?.predictive_smart_mode) {
       finalOutput.predictive_smart_mode.predictive_status =
         finalOutput.predictive_smart_mode?.best_future_candidate
@@ -1190,8 +1255,8 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v7";
-    finalOutput.oracle_mode = "all_domain_ecosystem_packet";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v8_COMPLIANT";
+    finalOutput.oracle_mode = "FULLY_COMPLIANT_ECOSYSTEM_PACKET";
 
     return res.status(200).json(finalOutput);
   } catch (error) {
