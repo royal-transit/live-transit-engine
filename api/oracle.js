@@ -234,14 +234,22 @@ function buildEventInterpretation(data) {
   const predictive = data?.predictive_smart_mode || {};
   const dasha = data?.dasha || {};
   const divisional = data?.divisional || {};
+  const triggerScan = data?.trigger_scan || {};
 
   let pastPattern =
     "Pattern suggests a similar karmic cycle or event-family was activated before under a related trigger structure.";
 
-  let presentManifestation = "Background phase with no dominant lived event fully breaking through.";
+  let presentManifestation =
+    "Background phase with no dominant lived event fully breaking through.";
   let futureEventNature = "No strong future event nature isolated yet.";
   let futureChannel = "general";
   let futureTone = "neutral";
+
+  const dominantTrigger =
+    timing?.dominant_trigger_identity ||
+    triggerScan?.dominant_trigger?.details?.dominant_trigger_identity ||
+    triggerScan?.dominant_trigger?.kind ||
+    null;
 
   const hasRahuMercury = aspects.some(
     (a) =>
@@ -267,84 +275,101 @@ function buildEventInterpretation(data) {
       (a.planet1 === "Jupiter" && a.planet2 === "Venus")
   );
 
-  if (hasRahuMercury) {
+  // ==============================
+  // PHASE 2:
+  // DOMINANT TRIGGER HARD OVERRIDE
+  // ==============================
+  if (dominantTrigger === "moon_nakshatra_entry") {
     presentManifestation =
-      "Hidden communication, mixed signals, clever negotiation, paperwork distortion, or deal-confusion environment is active.";
+      "A fresh emotional field, contact-opening atmosphere, movement in feeling, or immediate life-shift gate is active now.";
     futureEventNature =
-      "A message, proposal, contact, or decision-linked communication is likely to emerge with a hidden twist, trap, or layered meaning.";
+      "A new lived phase is opening through contact, emotional shift, movement, response, or a fresh unfolding event tied to the present lunar entry.";
+    futureChannel = "emotion / opening / movement / contact";
+    futureTone = "fresh / immediate / responsive";
+    pastPattern =
+      "A similar lunar opening likely marked the beginning of a noticeable emotional, contact-based, or movement-linked phase before.";
+  } else if (dominantTrigger === "moon_mars_square") {
+    presentManifestation =
+      "Emotional heat, confrontation pressure, reactive movement, or sharp inner agitation is active now.";
+    futureEventNature =
+      "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
+    futureChannel = "emotion / confrontation / sudden action";
+    futureTone = "conflict / heat / impulsive";
+    pastPattern =
+      "A similar cycle likely brought heat, irritation, emotional reaction, conflict, or pressure-led movement before.";
+  } else if (dominantTrigger === "rahu_mercury_conjunction") {
+    presentManifestation =
+      "Hidden communication, mixed signals, paperwork distortion, or clever negotiation pressure is active now.";
+    futureEventNature =
+      "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
     futureChannel = "communication / deal / paperwork";
     futureTone = "confusion / manipulation / clever offer";
     pastPattern =
       "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
-  }
-
-  if (hasMoonMars) {
-    presentManifestation =
-      "Emotional heat, reactive pressure, conflict-proneness, or fast-moving agitation is active in lived reality.";
-    if (futureEventNature === "No strong future event nature isolated yet.") {
-      futureEventNature =
-        "A sharp emotional exchange, argument, impulsive move, or pressure-driven reaction may form next.";
-      futureChannel = "emotion / conflict / movement";
-      futureTone = "heat / impulsive / sharp";
-    }
-  }
-
-  if (hasSunSaturn) {
+  } else if (dominantTrigger === "sun_saturn_conjunction") {
     presentManifestation =
       "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
-    if (futureEventNature === "No strong future event nature isolated yet.") {
-      futureEventNature =
-        "A duty-linked decision, authority interaction, pressure event, or formal burden may crystallise next.";
-      futureChannel = "authority / duty / public pressure";
-      futureTone = "pressure / delay / responsibility";
-    }
-  }
-
-  if (hasVenusJupiter) {
-    if (futureEventNature === "No strong future event nature isolated yet.") {
-      futureEventNature =
-        "A support window, alliance, help, blessing, easing, or graceful opening may emerge.";
-      futureChannel = "support / alliance / opportunity";
-      futureTone = "supportive / opening / blessing";
-    }
-  }
-
-  if (data.timing_evidence?.dominant_trigger_identity === "moon_mars_square") {
-    presentManifestation =
-      "Emotional heat, confrontation pressure, reactive movement, or sharp inner agitation is active now.";
-
-    futureEventNature =
-      "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
-
-    futureTone = "conflict / heat / impulsive";
-    futureChannel = "emotion / confrontation / sudden action";
-  }
-
-  if (data.timing_evidence?.dominant_trigger_identity === "rahu_mercury_conjunction") {
-    presentManifestation =
-      "Hidden communication, mixed signals, paperwork distortion, or clever negotiation pressure is active now.";
-
-    futureEventNature =
-      "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
-
-    futureTone = "confusion / manipulation / clever offer";
-    futureChannel = "communication / deal / paperwork";
-  }
-
-  if (data.timing_evidence?.dominant_trigger_identity === "sun_saturn_conjunction") {
-    presentManifestation =
-      "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
-
     futureEventNature =
       "A duty-linked, authority-linked, or pressure-driven event is likely to crystallise through responsibility, formal contact, delay, or public weight.";
-
-    futureTone = "pressure / duty / delay";
     futureChannel = "authority / structure / responsibility";
+    futureTone = "pressure / duty / delay";
+    pastPattern =
+      "A similar cycle likely brought duty, delay, formal pressure, burden, or authority-linked heaviness before.";
   }
 
-  if (timing.trigger_present === true && timing.dominant_trigger_identity) {
+  // ==============================
+  // FALLBACK ONLY IF NO DOMINANT LOCK
+  // ==============================
+  else {
+    if (hasRahuMercury) {
+      presentManifestation =
+        "Hidden communication, mixed signals, clever negotiation, paperwork distortion, or deal-confusion environment is active.";
+      futureEventNature =
+        "A message, proposal, contact, or decision-linked communication is likely to emerge with a hidden twist, trap, or layered meaning.";
+      futureChannel = "communication / deal / paperwork";
+      futureTone = "confusion / manipulation / clever offer";
+      pastPattern =
+        "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
+    }
+
+    if (hasMoonMars) {
+      presentManifestation =
+        "Emotional heat, reactive pressure, conflict-proneness, or fast-moving agitation is active in lived reality.";
+      if (futureEventNature === "No strong future event nature isolated yet.") {
+        futureEventNature =
+          "A sharp emotional exchange, argument, impulsive move, or pressure-driven reaction may form next.";
+        futureChannel = "emotion / conflict / movement";
+        futureTone = "heat / impulsive / sharp";
+      }
+    }
+
+    if (hasSunSaturn) {
+      presentManifestation =
+        "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
+      if (futureEventNature === "No strong future event nature isolated yet.") {
+        futureEventNature =
+          "A duty-linked decision, authority interaction, pressure event, or formal burden may crystallise next.";
+        futureChannel = "authority / duty / public pressure";
+        futureTone = "pressure / delay / responsibility";
+      }
+    }
+
+    if (hasVenusJupiter) {
+      if (futureEventNature === "No strong future event nature isolated yet.") {
+        futureEventNature =
+          "A support window, alliance, help, blessing, easing, or graceful opening may emerge.";
+        futureChannel = "support / alliance / opportunity";
+        futureTone = "supportive / opening / blessing";
+      }
+    }
+  }
+
+  // ==============================
+  // PRESENT TRIGGER / FUTURE TRIGGER APPEND
+  // ==============================
+  if (timing.trigger_present === true && dominantTrigger) {
     futureEventNature =
-      `${futureEventNature} Present trigger is already live through ${timing.dominant_trigger_identity}.`;
+      `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
   }
 
   if (
@@ -372,7 +397,8 @@ function buildEventInterpretation(data) {
     present_manifestation: presentManifestation,
     future_event_nature: futureEventNature,
     future_channel: futureChannel,
-    future_tone: futureTone
+    future_tone: futureTone,
+    interpretation_source: dominantTrigger ? "dominant_trigger_lock" : "aspect_fallback"
   };
 }
 
