@@ -1,5 +1,233 @@
 import { predictiveSmartMode } from "./predictiveSmartMode.js";
 
+// ==============================
+// PHASE 1 ADDITION:
+// FULL TRIGGER SCAN HELPERS
+// ==============================
+
+function toTimestamp(value) {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function cloneTriggerCandidate(candidate, source, bucket) {
+  if (!candidate || typeof candidate !== "object") return null;
+  return {
+    ...candidate,
+    source,
+    bucket
+  };
+}
+
+function bucketByTimeDiffHours(hoursAhead) {
+  if (hoursAhead === null || hoursAhead === undefined) return "discarded_weak_triggers";
+  if (hoursAhead <= 0.5) return "current_active_triggers";
+  if (hoursAhead <= 24) return "next_24h_triggers";
+  if (hoursAhead <= 72) return "next_72h_triggers";
+  return "discarded_weak_triggers";
+}
+
+function pushRankedTrigger(triggers, candidate, source, hoursAhead = null) {
+  if (!candidate) return;
+
+  const strength = Number(candidate.strength_score || 0);
+  let bucket = bucketByTimeDiffHours(hoursAhead);
+
+  // Strength override logic
+  if (strength >= 0.8 && bucket === "next_24h_triggers") {
+    bucket = "current_active_triggers";
+  } else if (strength >= 0.6 && bucket === "next_72h_triggers") {
+    bucket = "next_24h_triggers";
+  } else if (strength < 0.35) {
+    bucket = "discarded_weak_triggers";
+  }
+
+  triggers[bucket].push(cloneTriggerCandidate(candidate, source, bucket));
+}
+
+function buildLiveCurrentTrigger(snapshot) {
+  const timing = snapshot?.timing_evidence || {};
+  if (!timing?.trigger_present || !timing?.dominant_trigger_identity) return null;
+
+  return {
+    kind: "live_current_trigger",
+    predicted_time_utc: timing?.exact_time_candidate_utc || snapshot?.timestamp || null,
+    confidence: "HIGH",
+    strength_score: 0.95,
+    reason: `Current dominant trigger already live: ${timing.dominant_trigger_identity}`,
+    details: {
+      dominant_trigger_identity: timing.dominant_trigger_identity,
+      timing_grade: timing.timing_grade || null,
+      timing_source: timing.timing_source || null
+    }
+  };
+}
+
+function fullTriggerScan(snapshot) {
+  const triggers = {
+    current_active_triggers: [],
+    next_24h_triggers: [],
+    next_72h_triggers: [],
+    dominant_trigger: null,
+    secondary_trigger: null,
+    discarded_weak_triggers: []
+  };
+
+  const modules = snapshot?.predictive_smart_mode?.modules || {};
+  const predictive = snapshot?.predictive_smart_mode || {};
+  const scanBaseTs =
+    toTimestamp(snapshot?.timestamp) ||
+    toTimestamp(snapshot?.freshness?.generated_at) ||
+    Date.now();
+
+  // 1) If current live trigger exists, always include it
+  const liveCurrent = buildLiveCurrentTrigger(snapshot);
+  if (liveCurrent) {
+    triggers.current_active_triggers.push(
+      cloneTriggerCandidate(liveCurrent, "timing_evidence", "current_active_triggers")
+    );
+  }
+
+  // 2) Best future candidate from predictive mode
+  if (predictive?.best_future_candidate?.predicted_time_utc) {
+    const ts = toTimestamp(predictive.best_future_candidate.predicted_time_utc);
+    const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
+    pushRankedTrigger(
+      triggers,
+      predictive.best_future_candidate,
+      "predictive_smart_mode.best_future_candidate",
+      hoursAhead
+    );
+  }
+
+  // 3) Aspect approach timing candidates
+  if (modules.aspect_approach_timing) {
+    Object.entries(modules.aspect_approach_timing).forEach(([key, mod]) => {
+      if (mod?.candidate?.predicted_time_utc) {
+        const ts = toTimestamp(mod.candidate.predicted_time_utc);
+        const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
+        pushRankedTrigger(
+          triggers,
+          {
+            ...mod.candidate,
+            details: {
+              ...(mod.candidate.details || {}),
+              module_key: key
+            }
+          },
+          `aspect_approach_timing.${key}`,
+          hoursAhead
+        );
+      }
+    });
+  }
+
+  // 4) Nakshatra / pada boundary triggers
+  if (Array.isArray(modules.nakshatra_boundary_trigger?.candidates)) {
+    modules.nakshatra_boundary_trigger.candidates.forEach((candidate, idx) => {
+      const ts = toTimestamp(candidate?.predicted_time_utc);
+      const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
+      pushRankedTrigger(
+        triggers,
+        {
+          ...candidate,
+          details: {
+            ...(candidate.details || {}),
+            candidate_index: idx
+          }
+        },
+        "nakshatra_boundary_trigger",
+        hoursAhead
+      );
+    });
+  }
+
+  // 5) Multi-snapshot predictive merge
+  if (modules.multi_snapshot_predictive_merge?.candidate?.predicted_time_utc) {
+    const candidate = modules.multi_snapshot_predictive_merge.candidate;
+    const ts = toTimestamp(candidate.predicted_time_utc);
+    const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
+    pushRankedTrigger(
+      triggers,
+      candidate,
+      "multi_snapshot_predictive_merge",
+      hoursAhead
+    );
+  }
+
+  // 6) Sort all buckets by strength desc, then nearest time
+  const sortFn = (a, b) => {
+    const strengthDiff = Number(b?.strength_score || 0) - Number(a?.strength_score || 0);
+    if (strengthDiff !== 0) return strengthDiff;
+
+    const ta = toTimestamp(a?.predicted_time_utc);
+    const tb = toTimestamp(b?.predicted_time_utc);
+
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return ta - tb;
+  };
+
+  triggers.current_active_triggers.sort(sortFn);
+  triggers.next_24h_triggers.sort(sortFn);
+  triggers.next_72h_triggers.sort(sortFn);
+  triggers.discarded_weak_triggers.sort(sortFn);
+
+  const allStrong = [
+    ...triggers.current_active_triggers,
+    ...triggers.next_24h_triggers,
+    ...triggers.next_72h_triggers
+  ].sort(sortFn);
+
+  triggers.dominant_trigger = allStrong[0] || null;
+  triggers.secondary_trigger = allStrong[1] || null;
+
+  return triggers;
+}
+
+function buildThreeDayPhaseMap(data) {
+  const scan = data?.trigger_scan || {};
+  const timing = data?.timing_evidence || {};
+
+  const day1Primary =
+    scan?.current_active_triggers?.[0] ||
+    scan?.next_24h_triggers?.[0] ||
+    scan?.dominant_trigger ||
+    null;
+
+  const day2Primary =
+    scan?.next_24h_triggers?.[1] ||
+    scan?.next_72h_triggers?.[0] ||
+    scan?.secondary_trigger ||
+    null;
+
+  const day3Primary =
+    scan?.next_72h_triggers?.[1] ||
+    scan?.next_72h_triggers?.[0] ||
+    null;
+
+  return {
+    day_1: {
+      phase: timing?.trigger_present ? "activation_or_live_peak" : "immediate_build_or_first_gate",
+      primary_trigger: day1Primary || null
+    },
+    day_2: {
+      phase: "secondary_shift_or_followup",
+      primary_trigger: day2Primary || null
+    },
+    day_3: {
+      phase: "continuation_turn_or_manifestation_fade",
+      primary_trigger: day3Primary || null
+    }
+  };
+}
+
+// ==============================
+// EXISTING FUNCTIONS
+// ==============================
+
 function buildEventInterpretation(data) {
   const aspects = Array.isArray(data?.aspects_summary) ? data.aspects_summary : [];
   const timing = data?.timing_evidence || {};
@@ -80,38 +308,40 @@ function buildEventInterpretation(data) {
       futureTone = "supportive / opening / blessing";
     }
   }
-if (data.timing_evidence?.dominant_trigger_identity === "moon_mars_square") {
-  presentManifestation =
-    "Emotional heat, confrontation pressure, reactive movement, or sharp inner agitation is active now.";
 
-  futureEventNature =
-    "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
+  if (data.timing_evidence?.dominant_trigger_identity === "moon_mars_square") {
+    presentManifestation =
+      "Emotional heat, confrontation pressure, reactive movement, or sharp inner agitation is active now.";
 
-  futureTone = "conflict / heat / impulsive";
-  futureChannel = "emotion / confrontation / sudden action";
-}
+    futureEventNature =
+      "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
 
-if (data.timing_evidence?.dominant_trigger_identity === "rahu_mercury_conjunction") {
-  presentManifestation =
-    "Hidden communication, mixed signals, paperwork distortion, or clever negotiation pressure is active now.";
+    futureTone = "conflict / heat / impulsive";
+    futureChannel = "emotion / confrontation / sudden action";
+  }
 
-  futureEventNature =
-    "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
+  if (data.timing_evidence?.dominant_trigger_identity === "rahu_mercury_conjunction") {
+    presentManifestation =
+      "Hidden communication, mixed signals, paperwork distortion, or clever negotiation pressure is active now.";
 
-  futureTone = "confusion / manipulation / clever offer";
-  futureChannel = "communication / deal / paperwork";
-}
+    futureEventNature =
+      "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
 
-if (data.timing_evidence?.dominant_trigger_identity === "sun_saturn_conjunction") {
-  presentManifestation =
-    "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
+    futureTone = "confusion / manipulation / clever offer";
+    futureChannel = "communication / deal / paperwork";
+  }
 
-  futureEventNature =
-    "A duty-linked, authority-linked, or pressure-driven event is likely to crystallise through responsibility, formal contact, delay, or public weight.";
+  if (data.timing_evidence?.dominant_trigger_identity === "sun_saturn_conjunction") {
+    presentManifestation =
+      "Authority pressure, burden, responsibility, delay, or recognition under weight is active now.";
 
-  futureTone = "pressure / duty / delay";
-  futureChannel = "authority / structure / responsibility";
-}
+    futureEventNature =
+      "A duty-linked, authority-linked, or pressure-driven event is likely to crystallise through responsibility, formal contact, delay, or public weight.";
+
+    futureTone = "pressure / duty / delay";
+    futureChannel = "authority / structure / responsibility";
+  }
+
   if (timing.trigger_present === true && timing.dominant_trigger_identity) {
     futureEventNature =
       `${futureEventNature} Present trigger is already live through ${timing.dominant_trigger_identity}.`;
@@ -496,6 +726,17 @@ export default async function handler(req, res) {
 
     const finalOutput = predictiveSmartMode(baseOutput);
 
+    // ==============================
+    // PHASE 1 ADDITION:
+    // FULL TRIGGER MAP
+    // ==============================
+    const fullScan = fullTriggerScan(finalOutput);
+    finalOutput.trigger_scan = fullScan;
+    finalOutput.three_day_phase_map = buildThreeDayPhaseMap({
+      ...finalOutput,
+      trigger_scan: fullScan
+    });
+
     finalOutput.event_interpretation = buildEventInterpretation(finalOutput);
     finalOutput.confidence = buildConfidenceEnhanced(
       finalOutput.confidence,
@@ -515,7 +756,7 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v2";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v3";
     finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
