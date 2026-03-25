@@ -21,7 +21,9 @@ function cloneTriggerCandidate(candidate, source, bucket) {
 }
 
 function bucketByTimeDiffHours(hoursAhead) {
-  if (hoursAhead === null || hoursAhead === undefined) return "discarded_weak_triggers";
+  if (hoursAhead === null || hoursAhead === undefined) {
+    return "discarded_weak_triggers";
+  }
   if (hoursAhead <= 0.5) return "current_active_triggers";
   if (hoursAhead <= 24) return "next_24h_triggers";
   if (hoursAhead <= 72) return "next_72h_triggers";
@@ -34,7 +36,6 @@ function pushRankedTrigger(triggers, candidate, source, hoursAhead = null) {
   const strength = Number(candidate.strength_score || 0);
   let bucket = bucketByTimeDiffHours(hoursAhead);
 
-  // Strength override logic
   if (strength >= 0.8 && bucket === "next_24h_triggers") {
     bucket = "current_active_triggers";
   } else if (strength >= 0.6 && bucket === "next_72h_triggers") {
@@ -43,7 +44,10 @@ function pushRankedTrigger(triggers, candidate, source, hoursAhead = null) {
     bucket = "discarded_weak_triggers";
   }
 
-  triggers[bucket].push(cloneTriggerCandidate(candidate, source, bucket));
+  const enriched = cloneTriggerCandidate(candidate, source, bucket);
+  if (enriched) {
+    triggers[bucket].push(enriched);
+  }
 }
 
 function buildLiveCurrentTrigger(snapshot) {
@@ -81,7 +85,6 @@ function fullTriggerScan(snapshot) {
     toTimestamp(snapshot?.freshness?.generated_at) ||
     Date.now();
 
-  // 1) If current live trigger exists, always include it
   const liveCurrent = buildLiveCurrentTrigger(snapshot);
   if (liveCurrent) {
     triggers.current_active_triggers.push(
@@ -89,7 +92,6 @@ function fullTriggerScan(snapshot) {
     );
   }
 
-  // 2) Best future candidate from predictive mode
   if (predictive?.best_future_candidate?.predicted_time_utc) {
     const ts = toTimestamp(predictive.best_future_candidate.predicted_time_utc);
     const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
@@ -101,7 +103,6 @@ function fullTriggerScan(snapshot) {
     );
   }
 
-  // 3) Aspect approach timing candidates
   if (modules.aspect_approach_timing) {
     Object.entries(modules.aspect_approach_timing).forEach(([key, mod]) => {
       if (mod?.candidate?.predicted_time_utc) {
@@ -123,7 +124,6 @@ function fullTriggerScan(snapshot) {
     });
   }
 
-  // 4) Nakshatra / pada boundary triggers
   if (Array.isArray(modules.nakshatra_boundary_trigger?.candidates)) {
     modules.nakshatra_boundary_trigger.candidates.forEach((candidate, idx) => {
       const ts = toTimestamp(candidate?.predicted_time_utc);
@@ -143,7 +143,6 @@ function fullTriggerScan(snapshot) {
     });
   }
 
-  // 5) Multi-snapshot predictive merge
   if (modules.multi_snapshot_predictive_merge?.candidate?.predicted_time_utc) {
     const candidate = modules.multi_snapshot_predictive_merge.candidate;
     const ts = toTimestamp(candidate.predicted_time_utc);
@@ -156,7 +155,6 @@ function fullTriggerScan(snapshot) {
     );
   }
 
-  // 6) Sort all buckets by strength desc, then nearest time
   const sortFn = (a, b) => {
     const strengthDiff = Number(b?.strength_score || 0) - Number(a?.strength_score || 0);
     if (strengthDiff !== 0) return strengthDiff;
@@ -225,7 +223,8 @@ function buildThreeDayPhaseMap(data) {
 }
 
 // ==============================
-// EXISTING FUNCTIONS
+// PHASE 2:
+// DOMINANT TRIGGER LOCKED INTERPRETATION
 // ==============================
 
 function buildEventInterpretation(data) {
@@ -275,18 +274,15 @@ function buildEventInterpretation(data) {
       (a.planet1 === "Jupiter" && a.planet2 === "Venus")
   );
 
-  // ==============================
-  // PHASE 2:
-  // DOMINANT TRIGGER HARD OVERRIDE
-  // ==============================
+  // HARD OVERRIDE BASED ON DOMINANT TRIGGER
   if (
-  dominantTrigger === "moon_nakshatra_entry" ||
-  dominantTrigger === "moon_degree_lock"
-)
+    dominantTrigger === "moon_nakshatra_entry" ||
+    dominantTrigger === "moon_degree_lock"
+  ) {
     presentManifestation =
       "A fresh emotional field, contact-opening atmosphere, movement in feeling, or immediate life-shift gate is active now.";
     futureEventNature =
-      "A new lived phase is opening through contact, emotional shift, movement, response, or a fresh unfolding event tied to the present lunar entry.";
+      "A new lived phase is opening through contact, emotional shift, movement, response, or a fresh unfolding event tied to the present lunar trigger.";
     futureChannel = "emotion / opening / movement / contact";
     futureTone = "fresh / immediate / responsive";
     pastPattern =
@@ -318,12 +314,15 @@ function buildEventInterpretation(data) {
     futureTone = "pressure / duty / delay";
     pastPattern =
       "A similar cycle likely brought duty, delay, formal pressure, burden, or authority-linked heaviness before.";
-  }
-
-  // ==============================
-  // FALLBACK ONLY IF NO DOMINANT LOCK
-  // ==============================
-  else {
+  } else if (dominantTrigger === "live_current_trigger") {
+    presentManifestation =
+      "A present trigger is already live and is actively shaping the immediate event-field.";
+    futureEventNature =
+      "The live trigger is already in motion and is likely to manifest through its dominant channel without delay.";
+    futureChannel = "live trigger / immediate field";
+    futureTone = "active / immediate";
+  } else {
+    // FALLBACK ONLY IF NO DOMINANT TRIGGER LOCK MATCHED
     if (hasRahuMercury) {
       presentManifestation =
         "Hidden communication, mixed signals, clever negotiation, paperwork distortion, or deal-confusion environment is active.";
@@ -367,9 +366,6 @@ function buildEventInterpretation(data) {
     }
   }
 
-  // ==============================
-  // PRESENT TRIGGER / FUTURE TRIGGER APPEND
-  // ==============================
   if (timing.trigger_present === true && dominantTrigger) {
     futureEventNature =
       `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
@@ -755,10 +751,6 @@ export default async function handler(req, res) {
 
     const finalOutput = predictiveSmartMode(baseOutput);
 
-    // ==============================
-    // PHASE 1 ADDITION:
-    // FULL TRIGGER MAP
-    // ==============================
     const fullScan = fullTriggerScan(finalOutput);
     finalOutput.trigger_scan = fullScan;
     finalOutput.three_day_phase_map = buildThreeDayPhaseMap({
@@ -766,11 +758,16 @@ export default async function handler(req, res) {
       trigger_scan: fullScan
     });
 
-    finalOutput.event_interpretation = buildEventInterpretation(finalOutput);
+    finalOutput.event_interpretation = buildEventInterpretation({
+      ...finalOutput,
+      trigger_scan: fullScan
+    });
+
     finalOutput.confidence = buildConfidenceEnhanced(
       finalOutput.confidence,
       finalOutput
     );
+
     finalOutput.oracle_verdict = buildOracleVerdict(finalOutput);
 
     if (finalOutput?.predictive_smart_mode) {
