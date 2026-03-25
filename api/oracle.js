@@ -1,8 +1,7 @@
 import { predictiveSmartMode } from "./predictiveSmartMode.js";
 
 // ==============================
-// PHASE 1 ADDITION:
-// FULL TRIGGER SCAN HELPERS
+// CORE HELPERS
 // ==============================
 
 function toTimestamp(value) {
@@ -28,6 +27,52 @@ function bucketByTimeDiffHours(hoursAhead) {
   if (hoursAhead <= 24) return "next_24h_triggers";
   if (hoursAhead <= 72) return "next_72h_triggers";
   return "discarded_weak_triggers";
+}
+
+function buildCandidateFingerprint(candidate) {
+  if (!candidate || typeof candidate !== "object") return "unknown_candidate";
+
+  const kind = candidate.kind || "unknown_kind";
+  const time = candidate.predicted_time_utc || "no_time";
+  const sourcePair =
+    candidate?.details?.pair ||
+    candidate?.details?.dominant_trigger_identity ||
+    candidate?.details?.next_event ||
+    candidate?.reason ||
+    "no_detail";
+
+  return `${kind}|${time}|${sourcePair}`;
+}
+
+function dedupeCandidates(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+
+  for (const item of list) {
+    const fp = buildCandidateFingerprint(item);
+    if (!seen.has(fp)) {
+      seen.add(fp);
+      out.push(item);
+    }
+  }
+
+  return out;
+}
+
+function sortCandidates(list) {
+  return [...list].sort((a, b) => {
+    const strengthDiff = Number(b?.strength_score || 0) - Number(a?.strength_score || 0);
+    if (strengthDiff !== 0) return strengthDiff;
+
+    const ta = toTimestamp(a?.predicted_time_utc);
+    const tb = toTimestamp(b?.predicted_time_utc);
+
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return ta - tb;
+  });
 }
 
 function pushRankedTrigger(triggers, candidate, source, hoursAhead = null) {
@@ -67,6 +112,11 @@ function buildLiveCurrentTrigger(snapshot) {
     }
   };
 }
+
+// ==============================
+// PHASE 5:
+// FULL TRIGGER SCAN + DEDUPE
+// ==============================
 
 function fullTriggerScan(snapshot) {
   const triggers = {
@@ -155,69 +205,92 @@ function fullTriggerScan(snapshot) {
     );
   }
 
-  const sortFn = (a, b) => {
-    const strengthDiff = Number(b?.strength_score || 0) - Number(a?.strength_score || 0);
-    if (strengthDiff !== 0) return strengthDiff;
+  triggers.current_active_triggers = sortCandidates(dedupeCandidates(triggers.current_active_triggers));
+  triggers.next_24h_triggers = sortCandidates(dedupeCandidates(triggers.next_24h_triggers));
+  triggers.next_72h_triggers = sortCandidates(dedupeCandidates(triggers.next_72h_triggers));
+  triggers.discarded_weak_triggers = sortCandidates(dedupeCandidates(triggers.discarded_weak_triggers));
 
-    const ta = toTimestamp(a?.predicted_time_utc);
-    const tb = toTimestamp(b?.predicted_time_utc);
-
-    if (ta === null && tb === null) return 0;
-    if (ta === null) return 1;
-    if (tb === null) return -1;
-    return ta - tb;
-  };
-
-  triggers.current_active_triggers.sort(sortFn);
-  triggers.next_24h_triggers.sort(sortFn);
-  triggers.next_72h_triggers.sort(sortFn);
-  triggers.discarded_weak_triggers.sort(sortFn);
-
-  const allStrong = [
-    ...triggers.current_active_triggers,
-    ...triggers.next_24h_triggers,
-    ...triggers.next_72h_triggers
-  ].sort(sortFn);
+  const allStrong = sortCandidates(
+    dedupeCandidates([
+      ...triggers.current_active_triggers,
+      ...triggers.next_24h_triggers,
+      ...triggers.next_72h_triggers
+    ])
+  );
 
   triggers.dominant_trigger = allStrong[0] || null;
-  triggers.secondary_trigger = allStrong[1] || null;
+
+  const dominantFp = buildCandidateFingerprint(triggers.dominant_trigger);
+  triggers.secondary_trigger =
+    allStrong.find((item) => buildCandidateFingerprint(item) !== dominantFp) || null;
 
   return triggers;
+}
+
+// ==============================
+// PHASE 5:
+// CLEANER 3-DAY MAP
+// ==============================
+
+function pickFirstUnique(candidates, usedFingerprints) {
+  if (!Array.isArray(candidates)) return null;
+  for (const item of candidates) {
+    const fp = buildCandidateFingerprint(item);
+    if (!usedFingerprints.has(fp)) {
+      usedFingerprints.add(fp);
+      return item;
+    }
+  }
+  return null;
 }
 
 function buildThreeDayPhaseMap(data) {
   const scan = data?.trigger_scan || {};
   const timing = data?.timing_evidence || {};
+  const used = new Set();
 
   const day1Primary =
-    scan?.current_active_triggers?.[0] ||
-    scan?.next_24h_triggers?.[0] ||
-    scan?.dominant_trigger ||
-    null;
+    pickFirstUnique(
+      [
+        ...(scan?.current_active_triggers || []),
+        ...(scan?.next_24h_triggers || []),
+        ...(scan?.next_72h_triggers || []),
+        ...(scan?.dominant_trigger ? [scan.dominant_trigger] : [])
+      ],
+      used
+    ) || null;
 
   const day2Primary =
-    scan?.next_24h_triggers?.[1] ||
-    scan?.next_72h_triggers?.[0] ||
-    scan?.secondary_trigger ||
-    null;
+    pickFirstUnique(
+      [
+        ...(scan?.next_24h_triggers || []),
+        ...(scan?.next_72h_triggers || []),
+        ...(scan?.secondary_trigger ? [scan.secondary_trigger] : [])
+      ],
+      used
+    ) || null;
 
   const day3Primary =
-    scan?.next_72h_triggers?.[1] ||
-    scan?.next_72h_triggers?.[0] ||
-    null;
+    pickFirstUnique(
+      [
+        ...(scan?.next_72h_triggers || []),
+        ...(scan?.discarded_weak_triggers || [])
+      ],
+      used
+    ) || null;
 
   return {
     day_1: {
       phase: timing?.trigger_present ? "activation_or_live_peak" : "immediate_build_or_first_gate",
-      primary_trigger: day1Primary || null
+      primary_trigger: day1Primary
     },
     day_2: {
       phase: "secondary_shift_or_followup",
-      primary_trigger: day2Primary || null
+      primary_trigger: day2Primary
     },
     day_3: {
       phase: "continuation_turn_or_manifestation_fade",
-      primary_trigger: day3Primary || null
+      primary_trigger: day3Primary
     }
   };
 }
@@ -491,17 +564,17 @@ function buildFutureChannelFromDomain(domain, dominantTrigger) {
 
 // ==============================
 // PHASE 2 + 4:
-// DOMINANT TRIGGER LOCKED INTERPRETATION
+// INTERPRETATION
 // ==============================
 
 function buildEventInterpretation(data) {
   const aspects = Array.isArray(data?.aspects_summary) ? data.aspects_summary : [];
   const timing = data?.timing_evidence || {};
   const predictive = data?.predictive_smart_mode || {};
-  const dasha = data?.dasha || {};
-  const divisional = data?.divisional || {};
   const triggerScan = data?.trigger_scan || {};
   const domainHint = data?.domain_hint || {};
+  const dasha = data?.dasha || {};
+  const divisional = data?.divisional || {};
 
   let pastPattern =
     "Pattern suggests a similar karmic cycle or event-family was activated before under a related trigger structure.";
@@ -562,7 +635,7 @@ function buildEventInterpretation(data) {
     futureEventNature =
       "A sharp emotional, conflict-driven, or sudden reaction event is likely to peak through pressure, argument, urgency, or impulsive movement.";
     futureChannel = "emotion / confrontation / sudden action";
-    futureTone = "conflict / heat / impulsive";
+    futureTone = "heated / urgent / reactive";
     pastPattern =
       "A similar cycle likely brought heat, irritation, emotional reaction, conflict, or pressure-led movement before.";
   } else if (dominantTrigger === "rahu_mercury_conjunction") {
@@ -571,7 +644,7 @@ function buildEventInterpretation(data) {
     futureEventNature =
       "A message, proposal, deal, contact, or decision-linked communication is likely to peak with a hidden twist, layered meaning, or manipulative undertone.";
     futureChannel = "communication / deal / paperwork";
-    futureTone = "confusion / manipulation / clever offer";
+    futureTone = "clever / message-driven / developing";
     pastPattern =
       "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
   } else if (dominantTrigger === "sun_saturn_conjunction") {
@@ -580,7 +653,7 @@ function buildEventInterpretation(data) {
     futureEventNature =
       "A duty-linked, authority-linked, or pressure-driven event is likely to crystallise through responsibility, formal contact, delay, or public weight.";
     futureChannel = "authority / structure / responsibility";
-    futureTone = "pressure / duty / delay";
+    futureTone = "formal / pressured / duty-bound";
     pastPattern =
       "A similar cycle likely brought duty, delay, formal pressure, burden, or authority-linked heaviness before.";
   } else if (
@@ -588,7 +661,10 @@ function buildEventInterpretation(data) {
     predictive?.best_future_candidate?.predicted_time_utc
   ) {
     presentManifestation = buildDomainNarrative(dominantDomain, "present");
-    futureEventNature = buildDomainNarrative(dominantDomain, "future");
+    futureEventNature = `${buildDomainNarrative(
+      dominantDomain,
+      "future"
+    )} The projected trigger is building toward activation.`;
     futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
     futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
     pastPattern =
@@ -607,7 +683,7 @@ function buildEventInterpretation(data) {
       futureEventNature =
         "A message, proposal, contact, or decision-linked communication is likely to emerge with a hidden twist, trap, or layered meaning.";
       futureChannel = "communication / deal / paperwork";
-      futureTone = "confusion / manipulation / clever offer";
+      futureTone = "clever / message-driven / developing";
       pastPattern =
         "A similar cycle likely brought confusing communication, hidden motives, misleading talk, paperwork stress, or a deal that looked clearer than it really was.";
     }
@@ -619,7 +695,7 @@ function buildEventInterpretation(data) {
         futureEventNature =
           "A sharp emotional exchange, argument, impulsive move, or pressure-driven reaction may form next.";
         futureChannel = "emotion / conflict / movement";
-        futureTone = "heat / impulsive / sharp";
+        futureTone = "heated / urgent / reactive";
       }
     }
 
@@ -630,7 +706,7 @@ function buildEventInterpretation(data) {
         futureEventNature =
           "A duty-linked decision, authority interaction, pressure event, or formal burden may crystallise next.";
         futureChannel = "authority / duty / public pressure";
-        futureTone = "pressure / delay / responsibility";
+        futureTone = "formal / pressured / duty-bound";
       }
     }
 
@@ -639,20 +715,9 @@ function buildEventInterpretation(data) {
         futureEventNature =
           "A support window, alliance, help, blessing, easing, or graceful opening may emerge.";
         futureChannel = "support / alliance / opportunity";
-        futureTone = "supportive / opening / blessing";
+        futureTone = "easing / helpful / aligned";
       }
     }
-  }
-
-  if (
-    timing.trigger_present === false &&
-    predictive?.best_future_candidate?.predicted_time_utc &&
-    dominantDomain !== "general"
-  ) {
-    futureEventNature =
-      `${buildDomainNarrative(dominantDomain, "future")} The projected trigger is building toward activation.`;
-    futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
-    futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
   }
 
   if (timing.trigger_present === true && dominantTrigger) {
@@ -740,6 +805,10 @@ function buildOracleVerdict(data) {
     dominant_domain: domainHint?.dominant_domain || "general"
   };
 }
+
+// ==============================
+// MAIN HANDLER
+// ==============================
 
 export default async function handler(req, res) {
   try {
@@ -1070,7 +1139,7 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v5";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v6";
     finalOutput.oracle_mode = "all_domain_ecosystem_packet";
 
     return res.status(200).json(finalOutput);
