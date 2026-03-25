@@ -279,7 +279,10 @@ function buildEventInterpretation(data) {
   // PHASE 2:
   // DOMINANT TRIGGER HARD OVERRIDE
   // ==============================
-  if (dominantTrigger === "moon_nakshatra_entry") {
+  if (
+  dominantTrigger === "moon_nakshatra_entry" ||
+  dominantTrigger === "moon_degree_lock"
+)
     presentManifestation =
       "A fresh emotional field, contact-opening atmosphere, movement in feeling, or immediate life-shift gate is active now.";
     futureEventNature =
