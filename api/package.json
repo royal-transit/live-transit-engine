@@ -1,5 +1,8 @@
 {
   "name": "live-transit-engine",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "swisseph-v2": "latest"
+  }
 }
