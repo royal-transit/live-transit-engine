@@ -114,8 +114,171 @@ function buildLiveCurrentTrigger(snapshot) {
 }
 
 // ==============================
-// PHASE 5:
-// FULL TRIGGER SCAN + DEDUPE
+// KP CUSP ACTIVE DOMAIN WEIGHTING
+// ==============================
+
+function getKpCusps(data) {
+  return data?.kp_cusps || {};
+}
+
+function getCusp(data, house) {
+  const cusps = getKpCusps(data);
+  return cusps?.[String(house)] || cusps?.[house] || null;
+}
+
+function getLordText(cusp) {
+  return `${cusp?.star_lord || ""} ${cusp?.sub_lord || ""}`.trim();
+}
+
+function addKpDomainEvidence(evidence, house, cusp, domains) {
+  if (!cusp) return;
+  evidence.push({
+    house: String(house),
+    sign: cusp.sign || null,
+    degree: cusp.degree ?? null,
+    star_lord: cusp.star_lord || null,
+    sub_lord: cusp.sub_lord || null,
+    domains
+  });
+}
+
+function applyKpCuspalWeights(data, scores) {
+  const evidence = [];
+
+  const c1 = getCusp(data, 1);
+  const c2 = getCusp(data, 2);
+  const c3 = getCusp(data, 3);
+  const c4 = getCusp(data, 4);
+  const c5 = getCusp(data, 5);
+  const c6 = getCusp(data, 6);
+  const c7 = getCusp(data, 7);
+  const c8 = getCusp(data, 8);
+  const c9 = getCusp(data, 9);
+  const c10 = getCusp(data, 10);
+  const c11 = getCusp(data, 11);
+  const c12 = getCusp(data, 12);
+
+  if (c2) {
+    addWeight(scores, "money", 2);
+    addWeight(scores, "communication", 1);
+    addKpDomainEvidence(evidence, 2, c2, ["money", "speech", "family_value"]);
+  }
+
+  if (c3) {
+    addWeight(scores, "communication", 3);
+    addWeight(scores, "movement", 1);
+    addKpDomainEvidence(evidence, 3, c3, ["communication", "message", "short_movement"]);
+  }
+
+  if (c4) {
+    addWeight(scores, "support", 1);
+    addWeight(scores, "movement", 1);
+    addKpDomainEvidence(evidence, 4, c4, ["home", "vehicle", "settlement"]);
+  }
+
+  if (c5) {
+    addWeight(scores, "relationship", 1);
+    addWeight(scores, "spiritual", 1);
+    addWeight(scores, "support", 1);
+    addKpDomainEvidence(evidence, 5, c5, ["intelligence", "child", "romance", "spiritual_merit"]);
+  }
+
+  if (c6) {
+    addWeight(scores, "conflict", 3);
+    addWeight(scores, "authority", 1);
+    addWeight(scores, "money", 1);
+    addKpDomainEvidence(evidence, 6, c6, ["work", "obstacle", "debt", "enemy", "service"]);
+  }
+
+  if (c7) {
+    addWeight(scores, "relationship", 3);
+    addWeight(scores, "communication", 1);
+    addWeight(scores, "money", 1);
+    addKpDomainEvidence(evidence, 7, c7, ["relationship", "client", "public_response", "deal"]);
+  }
+
+  if (c8) {
+    addWeight(scores, "conflict", 2);
+    addWeight(scores, "spiritual", 2);
+    addWeight(scores, "money", 1);
+    addKpDomainEvidence(evidence, 8, c8, ["sudden_change", "hidden_pressure", "occult", "risk"]);
+  }
+
+  if (c9) {
+    addWeight(scores, "spiritual", 3);
+    addWeight(scores, "support", 2);
+    addWeight(scores, "movement", 1);
+    addKpDomainEvidence(evidence, 9, c9, ["luck", "faith", "guru", "long_distance"]);
+  }
+
+  if (c10) {
+    addWeight(scores, "authority", 3);
+    addWeight(scores, "money", 1);
+    addWeight(scores, "movement", 1);
+    addKpDomainEvidence(evidence, 10, c10, ["career", "authority", "public_action", "status"]);
+  }
+
+  if (c11) {
+    addWeight(scores, "money", 3);
+    addWeight(scores, "support", 2);
+    addWeight(scores, "communication", 1);
+    addKpDomainEvidence(evidence, 11, c11, ["gain", "fulfilment", "network", "income"]);
+  }
+
+  if (c12) {
+    addWeight(scores, "spiritual", 2);
+    addWeight(scores, "movement", 2);
+    addWeight(scores, "conflict", 1);
+    addKpDomainEvidence(evidence, 12, c12, ["loss", "foreign", "sleep", "isolation", "spiritual_retreat"]);
+  }
+
+  const lordTexts = [
+    getLordText(c1), getLordText(c2), getLordText(c3), getLordText(c4),
+    getLordText(c5), getLordText(c6), getLordText(c7), getLordText(c8),
+    getLordText(c9), getLordText(c10), getLordText(c11), getLordText(c12)
+  ].join(" ");
+
+  if (lordTexts.includes("Mercury")) {
+    addWeight(scores, "communication", 2);
+  }
+  if (lordTexts.includes("Venus")) {
+    addWeight(scores, "relationship", 2);
+    addWeight(scores, "support", 1);
+  }
+  if (lordTexts.includes("Jupiter")) {
+    addWeight(scores, "support", 2);
+    addWeight(scores, "spiritual", 1);
+    addWeight(scores, "money", 1);
+  }
+  if (lordTexts.includes("Saturn")) {
+    addWeight(scores, "authority", 2);
+    addWeight(scores, "conflict", 1);
+  }
+  if (lordTexts.includes("Mars")) {
+    addWeight(scores, "conflict", 2);
+    addWeight(scores, "movement", 1);
+  }
+  if (lordTexts.includes("Rahu")) {
+    addWeight(scores, "communication", 1);
+    addWeight(scores, "movement", 1);
+    addWeight(scores, "conflict", 1);
+  }
+  if (lordTexts.includes("Ketu")) {
+    addWeight(scores, "spiritual", 2);
+  }
+  if (lordTexts.includes("Moon")) {
+    addWeight(scores, "relationship", 1);
+    addWeight(scores, "movement", 1);
+  }
+  if (lordTexts.includes("Sun")) {
+    addWeight(scores, "authority", 2);
+  }
+
+  return evidence;
+}
+
+// ==============================
+// PHASE 5: FULL TRIGGER SCAN
 // ==============================
 
 function fullTriggerScan(snapshot) {
@@ -145,12 +308,7 @@ function fullTriggerScan(snapshot) {
   if (predictive?.best_future_candidate?.predicted_time_utc) {
     const ts = toTimestamp(predictive.best_future_candidate.predicted_time_utc);
     const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
-    pushRankedTrigger(
-      triggers,
-      predictive.best_future_candidate,
-      "predictive_smart_mode.best_future_candidate",
-      hoursAhead
-    );
+    pushRankedTrigger(triggers, predictive.best_future_candidate, "predictive_smart_mode.best_future_candidate", hoursAhead);
   }
 
   if (modules.aspect_approach_timing) {
@@ -197,12 +355,7 @@ function fullTriggerScan(snapshot) {
     const candidate = modules.multi_snapshot_predictive_merge.candidate;
     const ts = toTimestamp(candidate.predicted_time_utc);
     const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
-    pushRankedTrigger(
-      triggers,
-      candidate,
-      "multi_snapshot_predictive_merge",
-      hoursAhead
-    );
+    pushRankedTrigger(triggers, candidate, "multi_snapshot_predictive_merge", hoursAhead);
   }
 
   triggers.current_active_triggers = sortCandidates(dedupeCandidates(triggers.current_active_triggers));
@@ -228,8 +381,7 @@ function fullTriggerScan(snapshot) {
 }
 
 // ==============================
-// PHASE 5:
-// CLEANER 3-DAY MAP
+// PHASE 5: CLEANER 3-DAY MAP
 // ==============================
 
 function pickFirstUnique(candidates, usedFingerprints) {
@@ -296,8 +448,7 @@ function buildThreeDayPhaseMap(data) {
 }
 
 // ==============================
-// PHASE 3:
-// DOMAIN HINT + TRIGGER FAMILY
+// PHASE 3: DOMAIN HINT + TRIGGER FAMILY
 // ==============================
 
 function normalizeDomainScoreMap() {
@@ -332,6 +483,8 @@ function classifyTriggerDomains(data) {
     null;
 
   const futureCandidate = predictive?.best_future_candidate || null;
+
+  const kpEvidence = applyKpCuspalWeights(data, scores);
 
   const hasRahuMercury = aspects.some(
     (a) =>
@@ -422,13 +575,14 @@ function classifyTriggerDomains(data) {
     dominant_domain: rankedDomains[0]?.domain || "general",
     secondary_domain: rankedDomains[1]?.domain || null,
     ranked_domains: rankedDomains,
-    trigger_family: dominantTrigger || "unknown_trigger_family"
+    trigger_family: dominantTrigger || "unknown_trigger_family",
+    kp_cuspal_evidence: kpEvidence,
+    kp_status: kpEvidence.length > 0 ? "ACTIVE_IN_DOMAIN_CLASSIFICATION" : "NO_KP_CUSP_DATA"
   };
 }
 
 // ==============================
-// PHASE 4:
-// DOMAIN-AWARE WORDING LOCK
+// PHASE 4: DOMAIN-AWARE WORDING LOCK
 // ==============================
 
 function buildDomainNarrative(domain, mode = "future") {
@@ -565,8 +719,7 @@ function buildFutureChannelFromDomain(domain, dominantTrigger) {
 }
 
 // ==============================
-// PHASE 6:
-// COMMUNICATION -> MONEY BRIDGE
+// PHASE 6: COMMUNICATION -> MONEY BRIDGE
 // ==============================
 
 function getDomainScore(domainHint, name) {
@@ -597,8 +750,7 @@ function buildCommunicationMoneyOverlay(domainHint) {
 }
 
 // ==============================
-// PHASE 7:
-// PACKET COMPLIANCE BLOCK
+// PHASE 7: PACKET COMPLIANCE BLOCK
 // ==============================
 
 function buildComplianceBlock(data) {
@@ -623,6 +775,7 @@ function buildComplianceBlock(data) {
       divisional_layer: data?.divisional?.status === "active" ? "STRONG" : "WEAK",
       transit_layer: "ACTIVE",
       kp_micro_timing: timing?.precision_allowed || "WINDOW",
+      kp_cuspal_domain_layer: domainHint?.kp_status || "UNKNOWN",
       convergence_strength: timing?.convergence_strength || "LOW",
       dominant_domain: domainHint?.dominant_domain || "general",
       secondary_domain: domainHint?.secondary_domain || null
@@ -655,8 +808,7 @@ function buildComplianceBlock(data) {
 }
 
 // ==============================
-// PHASE 2 + 4 + 6:
-// INTERPRETATION
+// PHASE 2 + 4 + 6: INTERPRETATION
 // ==============================
 
 function buildEventInterpretation(data) {
@@ -827,11 +979,25 @@ function buildEventInterpretation(data) {
       futureChannel = communicationMoneyOverlay.channel;
       futureTone = communicationMoneyOverlay.tone;
     }
+
+    if (futureEventNature === "No strong future event nature isolated yet.") {
+      presentManifestation = buildDomainNarrative(dominantDomain, "present");
+      futureEventNature = buildDomainNarrative(dominantDomain, "future");
+      futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
+      futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
+      pastPattern =
+        `A similar pattern likely unfolded before in the ${dominantDomain} domain when KP cusp and trigger evidence leaned toward that domain.`;
+    }
   }
 
   if (timing.trigger_present === true && dominantTrigger) {
     futureEventNature =
       `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
+  }
+
+  if (domainHint?.kp_status === "ACTIVE_IN_DOMAIN_CLASSIFICATION") {
+    futureEventNature =
+      `${futureEventNature} KP cuspal domain evidence is active, so the domain classification is reinforced by house-cusp star/sub-lord logic.`;
   }
 
   if (dasha?.status === "active" && divisional?.status === "active") {
@@ -845,13 +1011,14 @@ function buildEventInterpretation(data) {
     future_event_nature: futureEventNature,
     future_channel: futureChannel,
     future_tone: futureTone,
-    interpretation_source: dominantTrigger ? "dominant_trigger_lock" : "aspect_fallback"
+    interpretation_source: dominantTrigger ? "dominant_trigger_lock" : "kp_cuspal_domain_fallback"
   };
 }
 
 function buildConfidenceEnhanced(baseConfidence, data) {
   const timing = data?.timing_evidence || {};
   const predictive = data?.predictive_smart_mode || {};
+  const domainHint = data?.domain_hint || {};
 
   let confidenceClass = "MODERATE";
   let confidenceWarning = null;
@@ -873,6 +1040,13 @@ function buildConfidenceEnhanced(baseConfidence, data) {
     confidenceWarning = "Present timing support is weak.";
   }
 
+  if (domainHint?.kp_status === "ACTIVE_IN_DOMAIN_CLASSIFICATION") {
+    confidenceClass =
+      confidenceClass === "LOW_CONVERGENCE"
+        ? "KP_DOMAIN_SUPPORTED_BUT_TIMING_WEAK"
+        : `${confidenceClass}_KP_REINFORCED`;
+  }
+
   return {
     ...baseConfidence,
     confidence_class: confidenceClass,
@@ -892,7 +1066,8 @@ function buildOracleVerdict(data) {
       event_state: "ACTIVE_TRIGGER",
       best_actionable_time_utc: decision.exact_time_candidate_utc,
       best_actionable_mode: "PRESENT_TRIGGER",
-      dominant_domain: domainHint?.dominant_domain || "general"
+      dominant_domain: domainHint?.dominant_domain || "general",
+      kp_status: domainHint?.kp_status || "UNKNOWN"
     };
   }
 
@@ -902,7 +1077,8 @@ function buildOracleVerdict(data) {
       event_state: "FUTURE_TRIGGER",
       best_actionable_time_utc: predictive.best_future_candidate.predicted_time_utc,
       best_actionable_mode: "PREDICTIVE",
-      dominant_domain: domainHint?.dominant_domain || "general"
+      dominant_domain: domainHint?.dominant_domain || "general",
+      kp_status: domainHint?.kp_status || "UNKNOWN"
     };
   }
 
@@ -911,7 +1087,8 @@ function buildOracleVerdict(data) {
     event_state: "LOW_ACTIVITY",
     best_actionable_time_utc: null,
     best_actionable_mode: "WAIT",
-    dominant_domain: domainHint?.dominant_domain || "general"
+    dominant_domain: domainHint?.dominant_domain || "general",
+    kp_status: domainHint?.kp_status || "UNKNOWN"
   };
 }
 
@@ -1019,6 +1196,7 @@ export default async function handler(req, res) {
       ? {
           "1": transit.kp_cusps["1"] || null,
           "2": transit.kp_cusps["2"] || null,
+          "3": transit.kp_cusps["3"] || null,
           "4": transit.kp_cusps["4"] || null,
           "5": transit.kp_cusps["5"] || null,
           "6": transit.kp_cusps["6"] || null,
@@ -1111,6 +1289,11 @@ export default async function handler(req, res) {
     if (divisionalStatus === "active") {
       confidenceScore += 10;
       confidenceReasons.push("divisional active");
+    }
+
+    if (kpSummary) {
+      confidenceScore += 8;
+      confidenceReasons.push("kp cuspal layer active");
     }
 
     if (transit?.strength) {
@@ -1255,8 +1438,8 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v8_COMPLIANT";
-    finalOutput.oracle_mode = "FULLY_COMPLIANT_ECOSYSTEM_PACKET";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v9_KP_CUSPAL_ACTIVE";
+    finalOutput.oracle_mode = "FULLY_COMPLIANT_ECOSYSTEM_PACKET_KP_REINFORCED";
 
     return res.status(200).json(finalOutput);
   } catch (error) {
