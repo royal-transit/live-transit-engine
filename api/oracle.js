@@ -12,17 +12,11 @@ function toTimestamp(value) {
 
 function cloneTriggerCandidate(candidate, source, bucket) {
   if (!candidate || typeof candidate !== "object") return null;
-  return {
-    ...candidate,
-    source,
-    bucket
-  };
+  return { ...candidate, source, bucket };
 }
 
 function bucketByTimeDiffHours(hoursAhead) {
-  if (hoursAhead === null || hoursAhead === undefined) {
-    return "discarded_weak_triggers";
-  }
+  if (hoursAhead === null || hoursAhead === undefined) return "discarded_weak_triggers";
   if (hoursAhead <= 0.5) return "current_active_triggers";
   if (hoursAhead <= 24) return "next_24h_triggers";
   if (hoursAhead <= 72) return "next_72h_triggers";
@@ -90,9 +84,7 @@ function pushRankedTrigger(triggers, candidate, source, hoursAhead = null) {
   }
 
   const enriched = cloneTriggerCandidate(candidate, source, bucket);
-  if (enriched) {
-    triggers[bucket].push(enriched);
-  }
+  if (enriched) triggers[bucket].push(enriched);
 }
 
 function buildLiveCurrentTrigger(snapshot) {
@@ -114,8 +106,7 @@ function buildLiveCurrentTrigger(snapshot) {
 }
 
 // ==============================
-// PHASE 5:
-// FULL TRIGGER SCAN + DEDUPE
+// PHASE 5: FULL TRIGGER SCAN
 // ==============================
 
 function fullTriggerScan(snapshot) {
@@ -197,12 +188,7 @@ function fullTriggerScan(snapshot) {
     const candidate = modules.multi_snapshot_predictive_merge.candidate;
     const ts = toTimestamp(candidate.predicted_time_utc);
     const hoursAhead = ts !== null ? (ts - scanBaseTs) / 3600000 : null;
-    pushRankedTrigger(
-      triggers,
-      candidate,
-      "multi_snapshot_predictive_merge",
-      hoursAhead
-    );
+    pushRankedTrigger(triggers, candidate, "multi_snapshot_predictive_merge", hoursAhead);
   }
 
   triggers.current_active_triggers = sortCandidates(dedupeCandidates(triggers.current_active_triggers));
@@ -228,12 +214,12 @@ function fullTriggerScan(snapshot) {
 }
 
 // ==============================
-// PHASE 5:
-// CLEANER 3-DAY MAP
+// PHASE 5: THREE DAY MAP
 // ==============================
 
 function pickFirstUnique(candidates, usedFingerprints) {
   if (!Array.isArray(candidates)) return null;
+
   for (const item of candidates) {
     const fp = buildCandidateFingerprint(item);
     if (!usedFingerprints.has(fp)) {
@@ -241,6 +227,7 @@ function pickFirstUnique(candidates, usedFingerprints) {
       return item;
     }
   }
+
   return null;
 }
 
@@ -296,8 +283,7 @@ function buildThreeDayPhaseMap(data) {
 }
 
 // ==============================
-// PHASE 3:
-// DOMAIN HINT + TRIGGER FAMILY
+// DOMAIN HINT + KP VALIDATION
 // ==============================
 
 function normalizeDomainScoreMap() {
@@ -413,98 +399,86 @@ function classifyTriggerDomains(data) {
     if (futurePair.includes("Venus") || futurePair.includes("Jupiter")) addWeight(scores, "support", 1);
   }
 
+  // ==============================
+  // KP VALIDATION OVERRIDE
+  // Must run BEFORE rankedDomains creation
+  // ==============================
+
+  const kp = data?.kp_cusps || {};
+
+  function isActive(cusp) {
+    return Boolean(cusp && cusp.sub_lord);
+  }
+
+  const relationshipActive = isActive(kp["7"]) || isActive(kp["5"]);
+  const communicationActive = isActive(kp["3"]);
+  const moneyActive = isActive(kp["2"]) || isActive(kp["10"]) || isActive(kp["11"]);
+  const spiritualActive = isActive(kp["9"]) || isActive(kp["12"]);
+
+  if (relationshipActive) addWeight(scores, "relationship", 1);
+  if (communicationActive) addWeight(scores, "communication", 1);
+  if (moneyActive) addWeight(scores, "money", 1);
+  if (spiritualActive) addWeight(scores, "spiritual", 1);
+
+  const kpValidationApplied =
+    relationshipActive || communicationActive || moneyActive || spiritualActive;
+
   const rankedDomains = Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
     .filter(([, value]) => value > 0)
     .map(([domain, value]) => ({ domain, score: value }));
-// ==============================
-// KP VALIDATION OVERRIDE (ADD THIS)
-// ==============================
 
-const kp = data?.kp_cusps || {};
-
-function isActive(cusp) {
-  return cusp && cusp.sub_lord;
-}
-
-const relationshipActive = isActive(kp["7"]) || isActive(kp["5"]);
-const communicationActive = isActive(kp["3"]);
-const moneyActive = isActive(kp["2"]) || isActive(kp["10"]) || isActive(kp["11"]);
-const spiritualActive = isActive(kp["9"]) || isActive(kp["12"]);
-
-// Apply modifier (NOT replace, just adjust)
-if (relationshipActive) addWeight(scores, "relationship", 1);
-if (communicationActive) addWeight(scores, "communication", 1);
-if (moneyActive) addWeight(scores, "money", 1);
-if (spiritualActive) addWeight(scores, "spiritual", 1);
   return {
     dominant_domain: rankedDomains[0]?.domain || "general",
     secondary_domain: rankedDomains[1]?.domain || null,
     ranked_domains: rankedDomains,
-    trigger_family: dominantTrigger || "unknown_trigger_family"
+    trigger_family: dominantTrigger || "unknown_trigger_family",
+    kp_status: kpValidationApplied ? "KP_VALIDATION_ACTIVE" : "KP_VALIDATION_INACTIVE",
+    kp_validation_applied: kpValidationApplied
   };
 }
 
 // ==============================
-// PHASE 4:
-// DOMAIN-AWARE WORDING LOCK
+// DOMAIN WORDING
 // ==============================
 
 function buildDomainNarrative(domain, mode = "future") {
   const copy = {
     money: {
-      present:
-        "Money-related movement, release pressure, payment expectation, or value-linked activity is building now.",
-      future:
-        "A money-linked event is likely to take shape through payment, inflow, release, pricing, or deal-value movement."
+      present: "Money-related movement, release pressure, payment expectation, or value-linked activity is building now.",
+      future: "A money-linked event is likely to take shape through payment, inflow, release, pricing, or deal-value movement."
     },
     communication: {
-      present:
-        "A communication field is opening through message pressure, reply expectation, negotiation, contact, or paperwork movement.",
-      future:
-        "A communication-linked event is likely to form through message, reply, proposal, deal-talk, contact, or document activity."
+      present: "A communication field is opening through message pressure, reply expectation, negotiation, contact, or paperwork movement.",
+      future: "A communication-linked event is likely to form through message, reply, proposal, deal-talk, contact, or document activity."
     },
     authority: {
-      present:
-        "Authority pressure, formal structure, responsibility, review, or duty-linked weight is active in the field now.",
-      future:
-        "An authority-linked development is likely to form through duty, formal contact, approval pressure, delay, or responsibility."
+      present: "Authority pressure, formal structure, responsibility, review, or duty-linked weight is active in the field now.",
+      future: "An authority-linked development is likely to form through duty, formal contact, approval pressure, delay, or responsibility."
     },
     relationship: {
-      present:
-        "An emotional or relational field is active now through contact-opening, feeling shift, attention, response, or human closeness.",
-      future:
-        "A relationship-linked development is likely to unfold through contact, emotional movement, response, closeness, or renewed attention."
+      present: "An emotional or relational field is active now through contact-opening, feeling shift, attention, response, or human closeness.",
+      future: "A relationship-linked development is likely to unfold through contact, emotional movement, response, closeness, or renewed attention."
     },
     conflict: {
-      present:
-        "Pressure, irritation, friction, or confrontation energy is active now and can push a situation toward reaction.",
-      future:
-        "A conflict-linked development is likely to emerge through pressure, disagreement, sharp reaction, argument, or heated movement."
+      present: "Pressure, irritation, friction, or confrontation energy is active now and can push a situation toward reaction.",
+      future: "A conflict-linked development is likely to emerge through pressure, disagreement, sharp reaction, argument, or heated movement."
     },
     movement: {
-      present:
-        "Movement, travel, dispatch, transition, or active change in pace is building now in practical life.",
-      future:
-        "A movement-linked event is likely to unfold through travel, dispatch, relocation, fast response, or situational shift."
+      present: "Movement, travel, dispatch, transition, or active change in pace is building now in practical life.",
+      future: "A movement-linked event is likely to unfold through travel, dispatch, relocation, fast response, or situational shift."
     },
     support: {
-      present:
-        "A supportive field is active now through help, alignment, easing, opening, or cooperative energy.",
-      future:
-        "A supportive development is likely to form through help, alliance, grace, opportunity, easing, or beneficial alignment."
+      present: "A supportive field is active now through help, alignment, easing, opening, or cooperative energy.",
+      future: "A supportive development is likely to form through help, alliance, grace, opportunity, easing, or beneficial alignment."
     },
     spiritual: {
-      present:
-        "An inward, intuitive, or spiritually sensitive field is active now and can shape perception, receptivity, or reflection.",
-      future:
-        "A spiritually-toned or inward development is likely to unfold through reflection, subtle response, intuition, or inner opening."
+      present: "An inward, intuitive, or spiritually sensitive field is active now and can shape perception, receptivity, or reflection.",
+      future: "A spiritually-toned or inward development is likely to unfold through reflection, subtle response, intuition, or inner opening."
     },
     general: {
-      present:
-        "A general event-field is active now, but the signal is not yet sharply narrowed to a single domain.",
-      future:
-        "A general future event is building, but the domain is not yet sharply narrowed."
+      present: "A general event-field is active now, but the signal is not yet sharply narrowed to a single domain.",
+      future: "A general future event is building, but the domain is not yet sharply narrowed."
     }
   };
 
@@ -528,21 +502,14 @@ function buildFutureToneFromDomain(domain, dominantTrigger) {
     dominantTrigger === "rahu_mercury_conjunction" ||
     dominantTrigger === "aspect_approach_timing" ||
     dominantTrigger === "multi_snapshot_predictive_merge"
-  ) {
-    return "message / negotiation / paperwork movement";
-  }
+  ) return "message / negotiation / paperwork movement";
 
   if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
     return "fresh / responsive / immediate";
   }
 
-  if (dominantTrigger === "moon_mars_square") {
-    return "heated / urgent / reactive";
-  }
-
-  if (dominantTrigger === "sun_saturn_conjunction") {
-    return "formal / pressured / duty-bound";
-  }
+  if (dominantTrigger === "moon_mars_square") return "heated / urgent / reactive";
+  if (dominantTrigger === "sun_saturn_conjunction") return "formal / pressured / duty-bound";
 
   return toneMap[domain] || toneMap.general;
 }
@@ -564,27 +531,19 @@ function buildFutureChannelFromDomain(domain, dominantTrigger) {
     dominantTrigger === "rahu_mercury_conjunction" ||
     dominantTrigger === "aspect_approach_timing" ||
     dominantTrigger === "multi_snapshot_predictive_merge"
-  ) {
-    return "communication / deal / paperwork / reply";
-  }
+  ) return "communication / deal / paperwork / reply";
 
   if (dominantTrigger === "moon_degree_lock" || dominantTrigger === "moon_nakshatra_entry") {
     return "emotion / opening / movement / contact";
   }
 
-  if (dominantTrigger === "moon_mars_square") {
-    return "emotion / confrontation / sudden action";
-  }
-
-  if (dominantTrigger === "sun_saturn_conjunction") {
-    return "authority / structure / responsibility";
-  }
+  if (dominantTrigger === "moon_mars_square") return "emotion / confrontation / sudden action";
+  if (dominantTrigger === "sun_saturn_conjunction") return "authority / structure / responsibility";
 
   return channelMap[domain] || channelMap.general;
 }
 
 // ==============================
-// PHASE 6:
 // COMMUNICATION -> MONEY BRIDGE
 // ==============================
 
@@ -608,16 +567,13 @@ function buildCommunicationMoneyOverlay(domainHint) {
       "A communication field is opening through message pressure, customer response, negotiation, order-talk, contact, or paperwork movement with money relevance underneath.",
     future:
       "A communication-linked event is likely to form through message, reply, proposal, deal-talk, customer contact, order activity, or paperwork that can lead toward payment or money release.",
-    channel:
-      "communication / order / deal / paperwork / payment path",
-    tone:
-      "message / negotiation / paperwork / money-link"
+    channel: "communication / order / deal / paperwork / payment path",
+    tone: "message / negotiation / paperwork / money-link"
   };
 }
 
 // ==============================
-// PHASE 7:
-// PACKET COMPLIANCE BLOCK
+// COMPLIANCE BLOCK
 // ==============================
 
 function buildComplianceBlock(data) {
@@ -636,45 +592,34 @@ function buildComplianceBlock(data) {
       export_type: "ORACLE_STRUCTURED_PACKET",
       packet_grade: "COMPLIANT"
     },
-
     evidence_normalisation: {
       natal_layer: data?.dasha?.status === "active" ? "AVAILABLE" : "LIMITED",
       divisional_layer: data?.divisional?.status === "active" ? "STRONG" : "WEAK",
       transit_layer: "ACTIVE",
       kp_micro_timing: timing?.precision_allowed || "WINDOW",
+      kp_validation: domainHint?.kp_status || "UNKNOWN",
       convergence_strength: timing?.convergence_strength || "LOW",
       dominant_domain: domainHint?.dominant_domain || "general",
       secondary_domain: domainHint?.secondary_domain || null
     },
-
     execution_context: {
       context_type: domainHint?.dominant_domain || "general",
       channel_type: interpretation?.future_channel || "general",
-      execution_status:
-        timing?.trigger_present === true ? "ACTIVE" : "PENDING_TRIGGER",
-      permission_status:
-        data?.dasha?.status === "active" ? "OPEN" : "LIMITED",
-      route_status:
-        timing?.trigger_present === true ? "DIRECT" : "FORMING_ROUTE",
-      manifestation_form:
-        interpretation?.future_tone || "UNDEFINED"
+      execution_status: timing?.trigger_present === true ? "ACTIVE" : "PENDING_TRIGGER",
+      permission_status: data?.dasha?.status === "active" ? "OPEN" : "LIMITED",
+      route_status: timing?.trigger_present === true ? "DIRECT" : "FORMING_ROUTE",
+      manifestation_form: interpretation?.future_tone || "UNDEFINED"
     },
-
     fate_structure: {
-      fate_gate:
-        timing?.trigger_present === true ? "OPEN" : "FORMING",
+      fate_gate: timing?.trigger_present === true ? "OPEN" : "FORMING",
       execution_strength: confidence?.confidence_level || "MEDIUM",
-      authority_planet:
-        timing?.dominant_trigger_identity ||
-        domainHint?.trigger_family ||
-        "UNKNOWN",
+      authority_planet: timing?.dominant_trigger_identity || domainHint?.trigger_family || "UNKNOWN",
       event_radar: threeDay
     }
   };
 }
 
 // ==============================
-// PHASE 2 + 4 + 6:
 // INTERPRETATION
 // ==============================
 
@@ -689,7 +634,6 @@ function buildEventInterpretation(data) {
 
   let pastPattern =
     "Pattern suggests a similar karmic cycle or event-family was activated before under a related trigger structure.";
-
   let presentManifestation =
     "Background phase with no dominant lived event fully breaking through.";
   let futureEventNature = "No strong future event nature isolated yet.";
@@ -729,10 +673,7 @@ function buildEventInterpretation(data) {
       (a.planet1 === "Jupiter" && a.planet2 === "Venus")
   );
 
-  if (
-    dominantTrigger === "moon_nakshatra_entry" ||
-    dominantTrigger === "moon_degree_lock"
-  ) {
+  if (dominantTrigger === "moon_nakshatra_entry" || dominantTrigger === "moon_degree_lock") {
     presentManifestation =
       "A fresh emotional field, contact-opening atmosphere, movement in feeling, or immediate life-shift gate is active now.";
     futureEventNature =
@@ -775,20 +716,17 @@ function buildEventInterpretation(data) {
   ) {
     if (communicationMoneyOverlay) {
       presentManifestation = communicationMoneyOverlay.present;
-      futureEventNature =
-        `${communicationMoneyOverlay.future} The projected trigger is building toward activation.`;
+      futureEventNature = `${communicationMoneyOverlay.future} The projected trigger is building toward activation.`;
       futureChannel = communicationMoneyOverlay.channel;
       futureTone = communicationMoneyOverlay.tone;
       pastPattern =
         "A similar pattern likely unfolded before through communication, order-talk, customer response, or deal-flow that later connected to money movement.";
     } else {
       presentManifestation = buildDomainNarrative(dominantDomain, "present");
-      futureEventNature =
-        `${buildDomainNarrative(dominantDomain, "future")} The projected trigger is building toward activation.`;
+      futureEventNature = `${buildDomainNarrative(dominantDomain, "future")} The projected trigger is building toward activation.`;
       futureChannel = buildFutureChannelFromDomain(dominantDomain, dominantTrigger);
       futureTone = buildFutureToneFromDomain(dominantDomain, dominantTrigger);
-      pastPattern =
-        `A similar pattern likely unfolded before in the ${dominantDomain} domain when a related trigger structure matured.`;
+      pastPattern = `A similar pattern likely unfolded before in the ${dominantDomain} domain when a related trigger structure matured.`;
     }
   } else if (dominantTrigger === "live_current_trigger") {
     presentManifestation =
@@ -831,13 +769,11 @@ function buildEventInterpretation(data) {
       }
     }
 
-    if (hasVenusJupiter) {
-      if (futureEventNature === "No strong future event nature isolated yet.") {
-        futureEventNature =
-          "A support window, alliance, help, blessing, easing, or graceful opening may emerge.";
-        futureChannel = "support / alliance / opportunity";
-        futureTone = "easing / helpful / aligned";
-      }
+    if (hasVenusJupiter && futureEventNature === "No strong future event nature isolated yet.") {
+      futureEventNature =
+        "A support window, alliance, help, blessing, easing, or graceful opening may emerge.";
+      futureChannel = "support / alliance / opportunity";
+      futureTone = "easing / helpful / aligned";
     }
 
     if (communicationMoneyOverlay && futureChannel.includes("communication")) {
@@ -849,8 +785,7 @@ function buildEventInterpretation(data) {
   }
 
   if (timing.trigger_present === true && dominantTrigger) {
-    futureEventNature =
-      `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
+    futureEventNature = `${futureEventNature} Present trigger is already live through ${dominantTrigger}.`;
   }
 
   if (dasha?.status === "active" && divisional?.status === "active") {
@@ -884,10 +819,7 @@ function buildConfidenceEnhanced(baseConfidence, data) {
   } else if (predictive?.best_future_candidate?.predicted_time_utc) {
     confidenceClass = "PREDICTIVE_STRONG";
     confidenceWarning = "No present trigger; future-based projection is active.";
-  } else if (
-    timing.trigger_present === false &&
-    timing.convergence_strength === "low"
-  ) {
+  } else if (timing.trigger_present === false && timing.convergence_strength === "low") {
     confidenceClass = "LOW_CONVERGENCE";
     confidenceWarning = "Present timing support is weak.";
   }
@@ -911,7 +843,8 @@ function buildOracleVerdict(data) {
       event_state: "ACTIVE_TRIGGER",
       best_actionable_time_utc: decision.exact_time_candidate_utc,
       best_actionable_mode: "PRESENT_TRIGGER",
-      dominant_domain: domainHint?.dominant_domain || "general"
+      dominant_domain: domainHint?.dominant_domain || "general",
+      kp_status: domainHint?.kp_status || "UNKNOWN"
     };
   }
 
@@ -921,7 +854,8 @@ function buildOracleVerdict(data) {
       event_state: "FUTURE_TRIGGER",
       best_actionable_time_utc: predictive.best_future_candidate.predicted_time_utc,
       best_actionable_mode: "PREDICTIVE",
-      dominant_domain: domainHint?.dominant_domain || "general"
+      dominant_domain: domainHint?.dominant_domain || "general",
+      kp_status: domainHint?.kp_status || "UNKNOWN"
     };
   }
 
@@ -930,7 +864,8 @@ function buildOracleVerdict(data) {
     event_state: "LOW_ACTIVITY",
     best_actionable_time_utc: null,
     best_actionable_mode: "WAIT",
-    dominant_domain: domainHint?.dominant_domain || "general"
+    dominant_domain: domainHint?.dominant_domain || "general",
+    kp_status: domainHint?.kp_status || "UNKNOWN"
   };
 }
 
@@ -956,13 +891,8 @@ export default async function handler(req, res) {
       fetch(multiSnapshotUrl)
     ]);
 
-    if (!transitRes.ok) {
-      throw new Error(`transit_fetch_failed_${transitRes.status}`);
-    }
-
-    if (!multiRes.ok) {
-      throw new Error(`multi_snapshot_fetch_failed_${multiRes.status}`);
-    }
+    if (!transitRes.ok) throw new Error(`transit_fetch_failed_${transitRes.status}`);
+    if (!multiRes.ok) throw new Error(`multi_snapshot_fetch_failed_${multiRes.status}`);
 
     const transit = await transitRes.json();
     const multi = await multiRes.json();
@@ -995,32 +925,21 @@ export default async function handler(req, res) {
       transit?.micro_convergence?.cluster_density ||
       0;
 
-    const activeTriggerSnapshots =
-      multi?.active_trigger_snapshots || 0;
-
+    const activeTriggerSnapshots = multi?.active_trigger_snapshots || 0;
     const dashaStatus = transit?.dasha?.status || "absent";
     const divisionalStatus = transit?.divisional?.status || "absent";
 
     let timingMode = "window_only";
-    if (precisionAllowed === "minute_candidate" && exactTimeCandidate) {
-      timingMode = "exact_candidate";
-    }
+    if (precisionAllowed === "minute_candidate" && exactTimeCandidate) timingMode = "exact_candidate";
 
-    const exactDateCandidate = exactTimeCandidate
-      ? exactTimeCandidate.split("T")[0]
-      : null;
+    const exactDateCandidate = exactTimeCandidate ? exactTimeCandidate.split("T")[0] : null;
 
     const timeWindow = exactTimeCandidate
       ? {
-          start_utc:
-            transit?.micro_dominant_trigger?.cluster_start_utc || null,
-          end_utc:
-            transit?.micro_dominant_trigger?.cluster_end_utc || null
+          start_utc: transit?.micro_dominant_trigger?.cluster_start_utc || null,
+          end_utc: transit?.micro_dominant_trigger?.cluster_end_utc || null
         }
-      : {
-          start_utc: null,
-          end_utc: null
-        };
+      : { start_utc: null, end_utc: null };
 
     const planets = {
       sun: transit?.sun || null,
@@ -1038,6 +957,7 @@ export default async function handler(req, res) {
       ? {
           "1": transit.kp_cusps["1"] || null,
           "2": transit.kp_cusps["2"] || null,
+          "3": transit.kp_cusps["3"] || null,
           "4": transit.kp_cusps["4"] || null,
           "5": transit.kp_cusps["5"] || null,
           "6": transit.kp_cusps["6"] || null,
@@ -1107,10 +1027,7 @@ export default async function handler(req, res) {
     if (convergenceStrength === "high" || Number(convergenceStrength) >= 0.75) {
       confidenceScore += 25;
       confidenceReasons.push("high convergence");
-    } else if (
-      convergenceStrength === "medium" ||
-      Number(convergenceStrength) >= 0.4
-    ) {
+    } else if (convergenceStrength === "medium" || Number(convergenceStrength) >= 0.4) {
       confidenceScore += 15;
       confidenceReasons.push("medium convergence");
     } else {
@@ -1175,9 +1092,7 @@ export default async function handler(req, res) {
       kp_cusps: kpSummary,
 
       planets,
-      aspects_summary: Array.isArray(transit?.aspects)
-        ? transit.aspects.slice(0, 20)
-        : [],
+      aspects_summary: Array.isArray(transit?.aspects) ? transit.aspects.slice(0, 20) : [],
       strength: transit?.strength || null,
 
       dasha: dashaSummary,
@@ -1193,14 +1108,8 @@ export default async function handler(req, res) {
         cluster_density: clusterDensity,
         active_trigger_snapshots: activeTriggerSnapshots,
         time_window: timeWindow,
-        timing_grade:
-          triggerPresent && exactTimeCandidate
-            ? "EXACT_LOCK"
-            : "WINDOW_OR_PREDICTIVE",
-        timing_source:
-          triggerPresent && exactTimeCandidate
-            ? "present_trigger"
-            : "future_or_window"
+        timing_grade: triggerPresent && exactTimeCandidate ? "EXACT_LOCK" : "WINDOW_OR_PREDICTIVE",
+        timing_source: triggerPresent && exactTimeCandidate ? "present_trigger" : "future_or_window"
       },
 
       timing_decision: {
@@ -1245,10 +1154,7 @@ export default async function handler(req, res) {
       domain_hint: finalOutput.domain_hint
     });
 
-    finalOutput.confidence = buildConfidenceEnhanced(
-      finalOutput.confidence,
-      finalOutput
-    );
+    finalOutput.confidence = buildConfidenceEnhanced(finalOutput.confidence, finalOutput);
 
     finalOutput.oracle_verdict = buildOracleVerdict({
       ...finalOutput,
@@ -1274,8 +1180,8 @@ export default async function handler(req, res) {
           : "PRIMARY_FUTURE_SUPPORT";
     }
 
-    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v8_COMPLIANT";
-    finalOutput.oracle_mode = "FULLY_COMPLIANT_ECOSYSTEM_PACKET";
+    finalOutput.engine_status = "SMART_ORACLE_PREMIUM_v8_KP_VALIDATION_FIXED";
+    finalOutput.oracle_mode = "FULLY_COMPLIANT_ECOSYSTEM_PACKET_KP_VALIDATED";
 
     return res.status(200).json(finalOutput);
   } catch (error) {
