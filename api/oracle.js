@@ -417,7 +417,26 @@ function classifyTriggerDomains(data) {
     .sort((a, b) => b[1] - a[1])
     .filter(([, value]) => value > 0)
     .map(([domain, value]) => ({ domain, score: value }));
+// ==============================
+// KP VALIDATION OVERRIDE (ADD THIS)
+// ==============================
 
+const kp = data?.kp_cusps || {};
+
+function isActive(cusp) {
+  return cusp && cusp.sub_lord;
+}
+
+const relationshipActive = isActive(kp["7"]) || isActive(kp["5"]);
+const communicationActive = isActive(kp["3"]);
+const moneyActive = isActive(kp["2"]) || isActive(kp["10"]) || isActive(kp["11"]);
+const spiritualActive = isActive(kp["9"]) || isActive(kp["12"]);
+
+// Apply modifier (NOT replace, just adjust)
+if (relationshipActive) addWeight(scores, "relationship", 1);
+if (communicationActive) addWeight(scores, "communication", 1);
+if (moneyActive) addWeight(scores, "money", 1);
+if (spiritualActive) addWeight(scores, "spiritual", 1);
   return {
     dominant_domain: rankedDomains[0]?.domain || "general",
     secondary_domain: rankedDomains[1]?.domain || null,
