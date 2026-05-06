@@ -5,8 +5,7 @@
   "type": "module",
 
   "scripts": {
-    "build": "echo build-complete",
-    "start": "node api/oracle.js"
+    "build": "echo build-complete"
   },
 
   "dependencies": {}
