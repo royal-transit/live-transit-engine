@@ -1,5 +1,13 @@
 {
   "name": "live-transit-engine",
+  "version": "1.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+
+  "scripts": {
+    "build": "echo build-complete",
+    "start": "node api/oracle.js"
+  },
+
+  "dependencies": {}
 }
