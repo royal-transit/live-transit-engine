@@ -1,12 +1,8 @@
 {
   "name": "live-transit-engine",
-  "version": "1.0.0",
   "private": true,
   "type": "module",
-
-  "scripts": {
-    "build": "echo build-complete"
-  },
-
-  "dependencies": {}
+  "dependencies": {
+    "swisseph-v2": "latest"
+  }
 }
