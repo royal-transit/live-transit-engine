@@ -1,9 +1,17 @@
 import swe from "swisseph-v2";
 
+const ENGINE_STATUS = "UNIVERSAL_LIVE_TRANSIT_ORACLE_V9_ELITE_INPUT_NORMALIZED";
+
 const SIGNS = [
   "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
   "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
 ];
+
+const SIGNS_BN = {
+  Aries: "মেষ", Taurus: "বৃষ", Gemini: "মিথুন", Cancer: "কর্কট",
+  Leo: "সিংহ", Virgo: "কন্যা", Libra: "তুলা", Scorpio: "বৃশ্চিক",
+  Sagittarius: "ধনু", Capricorn: "মকর", Aquarius: "কুম্ভ", Pisces: "মীন"
+};
 
 const NAKSHATRAS = [
   "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
@@ -63,6 +71,17 @@ const VIMSHOTTARI_YEARS = {
   Mercury: 17
 };
 
+const CHALDEAN = {
+  A: 1, I: 1, J: 1, Q: 1, Y: 1,
+  B: 2, K: 2, R: 2,
+  C: 3, G: 3, L: 3, S: 3,
+  D: 4, M: 4, T: 4,
+  E: 5, H: 5, N: 5, X: 5,
+  U: 6, V: 6, W: 6,
+  O: 7, Z: 7,
+  F: 8, P: 8
+};
+
 const YEAR_DAYS = 365.2425;
 const NAK_SIZE = 360 / 27;
 const PADA_SIZE = NAK_SIZE / 4;
@@ -88,6 +107,15 @@ const MICRO_ASPECT_TARGETS = [
   { name: "opposition", angle: 180, orb: 0.05 }
 ];
 
+function norm(v) {
+  return String(v ?? "").trim();
+}
+
+function cleanNullable(v) {
+  const s = norm(v);
+  return s ? s : null;
+}
+
 function normalize360(value) {
   let result = value % 360;
   if (result < 0) result += 360;
@@ -96,6 +124,127 @@ function normalize360(value) {
 
 function round(value, digits = 6) {
   return Number(Number(value).toFixed(digits));
+}
+
+function digitalRoot(n) {
+  let x = Math.abs(Number(n) || 0);
+  while (x > 9) x = String(x).split("").reduce((a, b) => a + Number(b), 0);
+  return x;
+}
+
+function buildNameProfile(rawName) {
+  const clean = norm(rawName).replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ").trim();
+  const upper = clean.toUpperCase();
+  const tokens = clean ? clean.toLowerCase().split(" ") : [];
+  const values = upper.replace(/\s/g, "").split("").map((c) => CHALDEAN[c] || 0).filter(Boolean);
+  const total = values.reduce((a, b) => a + b, 0);
+  const root = total ? digitalRoot(total) : null;
+
+  const firstLetter = upper[0] || null;
+  const firstSoundKey = firstLetter ? firstLetter.toLowerCase() : null;
+
+  const rashiByFirst = {
+    A: "Aries", L: "Aries", E: "Aries",
+    B: "Taurus", V: "Taurus", U: "Taurus", W: "Taurus",
+    K: "Gemini", C: "Gemini", G: "Gemini",
+    D: "Cancer", H: "Cancer",
+    M: "Leo", T: "Leo",
+    P: "Virgo",
+    R: "Libra",
+    N: "Scorpio", Y: "Scorpio",
+    S: "Sagittarius",
+    J: "Capricorn",
+    Q: "Aquarius", X: "Aquarius",
+    O: "Pisces", Z: "Pisces", F: "Pisces"
+  };
+
+  const derivedRashi = rashiByFirst || null;
+
+  return {
+    raw_name: rawName || null,
+    normalized_name: clean ? clean.toLowerCase() : null,
+    tokens,
+    token_count: tokens.length,
+    first_letter: firstLetter,
+    first_sound_key: firstSoundKey,
+    name_length: upper.replace(/\s/g, "").length,
+    syllable_count: tokens.length || null,
+    values,
+    compound_number: total || null,
+    root_number: root,
+    vibration_class:
+      root === 1 ? "COMMAND" :
+      root === 2 ? "EMOTIONAL" :
+      root === 3 ? "EXPRESSIVE" :
+      root === 4 ? "STRUCTURAL" :
+      root === 5 ? "MERCURIAL" :
+      root === 6 ? "VENUSIAN" :
+      root === 7 ? "MYSTIC" :
+      root === 8 ? "SATURNIC" :
+      root === 9 ? "MARTIAL" :
+      "UNKNOWN",
+    derived_rashi_sign: derivedRashi,
+    derived_rashi_bengali: derivedRashi ? SIGNS_BN[derivedRashi] : null,
+    alias_candidates: clean ? [clean, clean.toLowerCase()] : []
+  };
+}
+
+function normalizeDob(dob) {
+  const s = cleanNullable(dob);
+  if (!s) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) {
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    const yyyy = m[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return null;
+}
+
+function normalizeTob(tob) {
+  const s = cleanNullable(tob);
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const hh = String(Math.min(23, Math.max(0, Number(m[1])))).padStart(2, "0");
+  const mm = String(Math.min(59, Math.max(0, Number(m[2])))).padStart(2, "0");
+  const ss = String(Math.min(59, Math.max(0, Number(m[3] || 0)))).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
+function normalizeOffset(offset) {
+  const s = cleanNullable(offset) || "+00:00";
+  if (/^[+-]\d{2}:\d{2}$/.test(s)) return s;
+  if (/^[+-]\d{1,2}$/.test(s)) return `${s[0]}${s.slice(1).padStart(2, "0")}:00`;
+  return "+00:00";
+}
+
+function buildBirthDateTime({ birth_datetime, dob, tob, timezone_offset }) {
+  const direct = cleanNullable(birth_datetime);
+  if (direct) {
+    const d = new Date(direct);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  const ymd = normalizeDob(dob);
+  const time = normalizeTob(tob);
+  const offset = normalizeOffset(timezone_offset);
+
+  if (!ymd || !time) return null;
+
+  const iso = `${ymd}T${time}${offset}`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function getSignData(longitude) {
@@ -264,9 +413,7 @@ function getSubLord(longitude) {
     const lord = DASHA_SEQUENCE[(startIndex + i) % DASHA_SEQUENCE.length];
     const segmentSize = nak.nak_size * (VIMSHOTTARI_YEARS[lord] / 120);
     cumulative += segmentSize;
-    if (nak.offset_in_nak <= cumulative + 1e-10) {
-      return lord;
-    }
+    if (nak.offset_in_nak <= cumulative + 1e-10) return lord;
   }
 
   return startLord;
@@ -346,13 +493,6 @@ function buildMahadashaTimeline(birthDate, moonLongitude, targetDate) {
   }
 
   return periods;
-}
-
-function parseBirthDateTime(input) {
-  if (!input || typeof input !== "string") return null;
-  const parsed = new Date(input);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
 }
 
 function buildDashaContext(birthDateTime, now, flags) {
@@ -761,20 +901,96 @@ function getDominantCluster(clusters) {
   return ranked[0];
 }
 
+function buildSubjectMode({ name, dob, tob, birthDateTime }) {
+  const hasName = Boolean(cleanNullable(name));
+  const hasDob = Boolean(normalizeDob(dob));
+  const hasTob = Boolean(normalizeTob(tob));
+  const hasBirthDateTime = Boolean(birthDateTime);
+
+  if (hasBirthDateTime || (hasDob && hasTob)) {
+    return {
+      subject_mode: "FULL_BIRTH_LIVE",
+      identity_depth: "LEVEL_5_FULL_BIRTH",
+      precision_mode: "FULL_BIRTH",
+      is_name_only_mode: false,
+      is_name_context_mode: false,
+      is_dob_locked: hasDob,
+      is_full_birth_locked: true,
+      live_mode: "NAME_WITH_FULL_DETAILS_LIVE"
+    };
+  }
+
+  if (hasDob) {
+    return {
+      subject_mode: "DOB_SUPPORTED_LIVE",
+      identity_depth: "LEVEL_4_NAME_DOB",
+      precision_mode: "DOB_ONLY_REDUCED",
+      is_name_only_mode: false,
+      is_name_context_mode: false,
+      is_dob_locked: true,
+      is_full_birth_locked: false,
+      live_mode: "NAME_WITH_DOB_LIVE"
+    };
+  }
+
+  if (hasName) {
+    return {
+      subject_mode: "NAME_ONLY_LIVE",
+      identity_depth: "LEVEL_2_NAME_ONLY",
+      precision_mode: "NAME_ONLY",
+      is_name_only_mode: true,
+      is_name_context_mode: false,
+      is_dob_locked: false,
+      is_full_birth_locked: false,
+      live_mode: "NAME_ONLY_LIVE"
+    };
+  }
+
+  return {
+    subject_mode: "UNIVERSAL_LIVE",
+    identity_depth: "LEVEL_1_UNIVERSAL",
+    precision_mode: "LIVE_ONLY",
+    is_name_only_mode: false,
+    is_name_context_mode: false,
+    is_dob_locked: false,
+    is_full_birth_locked: false,
+    live_mode: "UNIVERSAL_LIVE_ONLY"
+  };
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
 
-    const lat = parseFloat(req.query?.lat ?? "51.5074");
-    const lon = parseFloat(req.query?.lon ?? "-0.1278");
-    const birthDateTimeRaw = req.query?.birth_datetime ?? null;
+    const name = cleanNullable(req.query?.name);
+    const dob = normalizeDob(req.query?.dob);
+    const tob = normalizeTob(req.query?.tob);
+    const pob = cleanNullable(req.query?.pob);
+    const timezoneOffset = normalizeOffset(req.query?.timezone_offset || "+00:00");
+    const question = cleanNullable(req.query?.question);
+    const facts = cleanNullable(req.query?.facts);
+
+    const birthDateTime = buildBirthDateTime({
+      birth_datetime: req.query?.birth_datetime,
+      dob,
+      tob,
+      timezone_offset: timezoneOffset
+    });
+
+    const lat = parseFloat(req.query?.lat ?? req.query?.latitude ?? "51.5074");
+    const lon = parseFloat(req.query?.lon ?? req.query?.longitude ?? "-0.1278");
 
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
       return res.status(400).json({
+        engine_status: ENGINE_STATUS,
+        system_status: "INPUT_ERROR",
         error: "invalid_location_input",
-        details: "lat and lon must be valid numbers"
+        details: "lat/lon or latitude/longitude must be valid numbers"
       });
     }
+
+    const nameProfile = buildNameProfile(name || "");
+    const mode = buildSubjectMode({ name, dob, tob, birthDateTime });
 
     swe.swe_set_sid_mode(swe.SE_SIDM_LAHIRI, 0, 0);
 
@@ -806,7 +1022,54 @@ export default async function handler(req, res) {
     const generatedAt = now.toISOString();
 
     const result = {
-      timestamp: generatedAt,
+      engine_status: ENGINE_STATUS,
+      system_status: "OK",
+      mode: "LIVE_TRANSIT",
+      oracle_mode: mode.live_mode,
+      subject_mode: mode.subject_mode,
+      identity_depth: mode.identity_depth,
+      precision_mode: mode.precision_mode,
+
+      input_normalized: {
+        name,
+        dob,
+        tob,
+        pob,
+        latitude: round(lat, 6),
+        longitude: round(lon, 6),
+        timezone_offset: timezoneOffset,
+        birth_datetime: birthDateTime ? birthDateTime.toISOString() : null,
+        question,
+        facts,
+        current_datetime_iso: generatedAt
+      },
+
+      subject_context: {
+        question_mode: "LIVE",
+        subject_mode: mode.subject_mode,
+        identity_depth: mode.identity_depth,
+        identity_confidence: mode.is_full_birth_locked ? "HIGH" : mode.is_name_only_mode ? "MEDIUM" : "LOW_MEDIUM",
+        subject_key: birthDateTime ? `BIRTH:${birthDateTime.toISOString()}` : name ? `NAME:${name}` : "UNIVERSAL",
+        is_name_only_mode: mode.is_name_only_mode,
+        is_name_context_mode: mode.is_name_context_mode,
+        is_dob_locked: mode.is_dob_locked,
+        is_full_birth_locked: mode.is_full_birth_locked,
+        alias_candidates: nameProfile.alias_candidates,
+        name_profile: nameProfile
+      },
+
+      birth_context: {
+        birth_datetime_iso: birthDateTime ? birthDateTime.toISOString() : null,
+        birthplace: pob,
+        latitude: round(lat, 6),
+        longitude: round(lon, 6),
+        timezone_offset: timezoneOffset,
+        precision_mode: mode.precision_mode,
+        exact_timing_allowed: mode.is_full_birth_locked,
+        dasha_allowed: mode.is_full_birth_locked,
+        divisional_allowed: mode.is_full_birth_locked
+      },
+
       authority: {
         source: "Swiss Ephemeris",
         zodiac: "sidereal",
@@ -814,8 +1077,8 @@ export default async function handler(req, res) {
         node_mode: "true_node"
       },
       quality: {
-        q_grade: "Q3",
-        timing_precision: "live_degree_level",
+        q_grade: mode.is_full_birth_locked ? "Q5_FULL_BIRTH_LIVE" : mode.is_name_only_mode ? "Q2_NAME_ONLY_LIVE" : "Q3_UNIVERSAL_LIVE",
+        timing_precision: mode.is_full_birth_locked ? "live_micro_plus_natal_permission" : "live_degree_level_name_overlay",
         integrity_status: "clean_single_source"
       },
       freshness: {
@@ -852,6 +1115,22 @@ export default async function handler(req, res) {
     result.rahu = buildPlanetData("Rahu", rahu.longitude, rahu.latitude, rahu.speed, sun.longitude);
     result.ketu = buildPlanetData("Ketu", ketuLongitude, rahu.latitude, rahu.speed, sun.longitude);
 
+    result.identity_packet = {
+      subject_name: name,
+      name_profile: nameProfile,
+      derived_rashi: {
+        sign: nameProfile.derived_rashi_sign,
+        bengali: nameProfile.derived_rashi_bengali
+      },
+      numerology: {
+        clean_name: nameProfile.normalized_name ? nameProfile.normalized_name.toUpperCase() : null,
+        values: nameProfile.values,
+        total: nameProfile.compound_number,
+        root: nameProfile.root_number,
+        vibration_class: nameProfile.vibration_class
+      }
+    };
+
     const housesRaw = swe.swe_houses(jd, lat, lon, "P");
     const housesArray = parseHouseResult(housesRaw);
     const ascendantLongitude = normalize360(housesArray[1]);
@@ -878,21 +1157,20 @@ export default async function handler(req, res) {
       };
     }
 
-    const birthDateTime = parseBirthDateTime(birthDateTimeRaw);
-
     if (birthDateTime) {
       result.dasha = buildDashaContext(birthDateTime, now, flags);
       result.divisional = buildDivisionalContext(birthDateTime, lat, lon, flags);
     } else {
       result.dasha = {
         status: "absent_no_birth_datetime",
-        required_input: "birth_datetime",
-        format: "ISO 8601 with timezone, e.g. 1988-12-11T10:59:00+06:00"
+        required_input: "birth_datetime OR dob+tob+timezone_offset",
+        natal_timing_permission: "CLOSED_FOR_NAME_ONLY"
       };
       result.divisional = {
         status: "absent_no_birth_datetime",
-        required_input: "birth_datetime",
-        supported: ["D7", "D9", "D10", "D12", "D24"]
+        required_input: "birth_datetime OR dob+tob+timezone_offset",
+        supported: ["D7", "D9", "D10", "D12", "D24"],
+        divisional_reinforcement_grade: "WEAK_OR_ABSENT"
       };
     }
 
@@ -958,7 +1236,9 @@ export default async function handler(req, res) {
 
     result.micro_status = {
       trigger_present: microClusters.length > 0,
-      precision_allowed: microClusters.length > 0 ? "minute_candidate" : "window_only"
+      precision_allowed: microClusters.length > 0 ? "minute_candidate" : "window_only",
+      name_only_allowed: mode.is_name_only_mode,
+      full_birth_allowed: mode.is_full_birth_locked
     };
 
     result.micro_convergence = {
@@ -989,9 +1269,28 @@ export default async function handler(req, res) {
     result.micro_clusters = microClusters;
     result.micro_triggers = dedupedMicroTriggers;
 
+    result.live_elite_packet = {
+      packet_status: "COMPLETE",
+      usable_by_gpt_for_remedy_selection: true,
+      supports_universal_live: true,
+      supports_name_only_live: true,
+      supports_name_with_full_details_live: true,
+      missing_for_full_birth: birthDateTime ? [] : ["birth_datetime OR dob+tob+timezone_offset"],
+      strongest_available_layer:
+        mode.is_full_birth_locked ? "LIVE_TRANSIT_PLUS_DASHA_PLUS_DIVISIONAL_PLUS_KP" :
+        mode.is_name_only_mode ? "LIVE_TRANSIT_PLUS_NAME_PROFILE_PLUS_KP_CURRENT" :
+        "UNIVERSAL_LIVE_TRANSIT_PLUS_KP_CURRENT",
+      caution:
+        mode.is_full_birth_locked
+          ? "Full-birth live timing enabled."
+          : "Name-only live can show strong field and trigger, but natal dasha/divisional permission remains closed."
+    };
+
     return res.status(200).json(result);
   } catch (error) {
     return res.status(500).json({
+      engine_status: ENGINE_STATUS,
+      system_status: "FAILED",
       error: "transit_engine_failed",
       details: error && error.message ? error.message : "unknown transit error"
     });
