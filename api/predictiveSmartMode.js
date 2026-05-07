@@ -1,25 +1,39 @@
+// predictiveSmartMode.js
+// FULL REPLACEMENT — ELITE PREDICTIVE SMART MODE V2
+// Purpose: live transit + future trigger support, no fake exact, downstream-safe object output
+
+const VERSION = "ELITE_PREDICTIVE_SMART_MODE_V2";
+
 export function predictiveSmartMode(enginePacket) {
   const packet = structuredClone(enginePacket || {});
-  const timestamp = packet?.timestamp ? new Date(packet.timestamp) : new Date();
+  const baseTime = parseDate(packet.timestamp) || new Date();
 
-  const timing = packet?.timing_evidence || {};
-  const decision = packet?.timing_decision || {};
-  const planets = packet?.planets || {};
-  const moon = planets?.moon || null;
-  const mars = planets?.mars || null;
-  const mercury = planets?.mercury || null;
-  const rahu = planets?.rahu || null;
+  const timing = packet.timing_evidence || {};
+  const decision = packet.timing_decision || {};
+  const planets = packet.planets || {};
 
-  const NAK_SIZE = 13.333333333333334;
-  const PADA_SIZE = 3.3333333333333335;
+  const NAK_SIZE = 360 / 27;
+  const PADA_SIZE = NAK_SIZE / 4;
+  const MAX_HORIZON_MINUTES = 72 * 60;
 
   const NAKSHATRAS = [
-    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
-    "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
-    "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
-    "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta",
-    "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+    "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra",
+    "Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni",
+    "Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha",
+    "Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishta",
+    "Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"
   ];
+
+  const SIGNS = [
+    "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+    "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+  ];
+
+  function parseDate(v) {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
 
   function normalize360(v) {
     let x = Number(v) % 360;
@@ -28,369 +42,369 @@ export function predictiveSmartMode(enginePacket) {
   }
 
   function round(v, d = 6) {
-    return Number(Number(v).toFixed(d));
+    return Number(Number(v || 0).toFixed(d));
   }
 
-  function diff360(a, b) {
+  function toISO(d) {
+    return new Date(d).toISOString();
+  }
+
+  function addMinutes(date, mins) {
+    return new Date(date.getTime() + mins * 60000);
+  }
+
+  function signToIndex(sign) {
+    return SIGNS.indexOf(sign);
+  }
+
+  function absoluteLongitude(p) {
+    if (!p) return null;
+    if (typeof p.longitude === "number") return normalize360(p.longitude);
+    const si = signToIndex(p.sign);
+    if (si < 0 || typeof p.degree !== "number") return null;
+    return normalize360(si * 30 + Number(p.degree));
+  }
+
+  function speedDegPerMinute(p, fallbackDailySpeed = 0) {
+    if (p && typeof p.speed === "number" && Number.isFinite(p.speed)) {
+      return Number(p.speed) / 1440;
+    }
+    return fallbackDailySpeed / 1440;
+  }
+
+  function angularDiff(a, b) {
     const d = Math.abs(normalize360(a) - normalize360(b));
     return d > 180 ? 360 - d : d;
   }
 
-  function signToIndex(sign) {
-    const signs = [
-      "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-      "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
-    ];
-    return signs.indexOf(sign);
+  function signedAspectDelta(p1Lon, p2Lon, targetAngle) {
+    const raw = normalize360(p1Lon - p2Lon);
+    let delta = raw - targetAngle;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return delta;
   }
 
-  function absoluteLongitude(planetObj) {
-    if (!planetObj) return null;
-    if (typeof planetObj.longitude === "number") return normalize360(planetObj.longitude);
-    const si = signToIndex(planetObj.sign);
-    if (si === -1 || typeof planetObj.degree !== "number") return null;
-    return normalize360(si * 30 + Number(planetObj.degree));
-  }
-
-  function getMoonSpeedDegPerMinute() {
-    return 0.5 / 60;
-  }
-
-  function getMercurySpeedDegPerMinute() {
-    return 1.2 / 1440;
-  }
-
-  function getMarsSpeedDegPerMinute() {
-    return 0.5 / 1440;
-  }
-
-  function getRahuSpeedDegPerMinute() {
-    return 0.03 / 1440;
-  }
-
-  function buildNakshatraData(absLongitude) {
-    const lon = normalize360(absLongitude);
-    const nakIndex = Math.floor(lon / NAK_SIZE);
-    const offsetInNak = lon % NAK_SIZE;
-    const pada = Math.floor(offsetInNak / PADA_SIZE) + 1;
+  function getNakData(lon) {
+    const x = normalize360(lon);
+    const nakIndex = Math.floor(x / NAK_SIZE);
+    const offset = x % NAK_SIZE;
     return {
       nakshatra: NAKSHATRAS[nakIndex],
-      nakIndex,
-      pada,
-      offsetInNak
+      nak_index: nakIndex,
+      pada: Math.floor(offset / PADA_SIZE) + 1,
+      offset_in_nak: offset
     };
   }
 
-  function toISO(dateObj) {
-    return new Date(dateObj).toISOString();
+  function confidenceFromMinutes(mins, strong = 30, medium = 90) {
+    if (mins <= strong) return "HIGH";
+    if (mins <= medium) return "MEDIUM";
+    return "LOW";
   }
 
-  function addMinutes(dateObj, mins) {
-    return new Date(dateObj.getTime() + mins * 60000);
+  function strengthFromGap(gap, maxGap) {
+    return round(Math.max(0, Math.min(1, 1 - gap / maxGap)), 6);
   }
 
-  function buildCandidate({
-    kind,
-    predictedTime,
-    confidence,
-    strength,
-    reason,
-    details
-  }) {
+  function buildCandidate({ kind, time, confidence, strength, reason, details = {} }) {
+    if (!time) return null;
+    const d = parseDate(time);
+    if (!d) return null;
+
+    const minsAhead = (d.getTime() - baseTime.getTime()) / 60000;
+
+    if (minsAhead < -3 || minsAhead > MAX_HORIZON_MINUTES) return null;
+
     return {
       kind,
-      predicted_time_utc: toISO(predictedTime),
+      predicted_time_utc: toISO(d),
       confidence,
       strength_score: round(strength, 6),
       reason,
-      details: details || {}
+      details: {
+        ...details,
+        minutes_ahead: round(minsAhead, 3),
+        horizon: minsAhead <= 30 ? "NOW_30M" : minsAhead <= 1440 ? "NEXT_24H" : "NEXT_72H"
+      }
     };
   }
 
-  function pickBestCandidate(candidates) {
-    if (!Array.isArray(candidates) || !candidates.length) return null;
-    return [...candidates].sort((a, b) => {
-      if (b.strength_score !== a.strength_score) return b.strength_score - a.strength_score;
-      const rank = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-      if ((rank[b.confidence] || 0) !== (rank[a.confidence] || 0)) {
-        return (rank[b.confidence] || 0) - (rank[a.confidence] || 0);
+  function candidateRank(c) {
+    const conf = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+    return (Number(c?.strength_score || 0) * 10) + (conf[c?.confidence] || 0);
+  }
+
+  function dedupe(candidates) {
+    const seen = new Set();
+    const out = [];
+
+    for (const c of candidates.filter(Boolean)) {
+      const fp = [
+        c.kind,
+        c.predicted_time_utc,
+        c.details?.pair || "",
+        c.details?.next_event || "",
+        c.details?.target_angle ?? "",
+        c.details?.nearest_degree_lock ?? ""
+      ].join("|");
+
+      if (!seen.has(fp)) {
+        seen.add(fp);
+        out.push(c);
       }
+    }
+
+    return out;
+  }
+
+  function pickBest(candidates) {
+    const clean = dedupe(candidates);
+    if (!clean.length) return null;
+
+    return clean.sort((a, b) => {
+      const r = candidateRank(b) - candidateRank(a);
+      if (r !== 0) return r;
       return new Date(a.predicted_time_utc) - new Date(b.predicted_time_utc);
     })[0];
   }
 
-  function multiSnapshotPredictiveMerge(baseTime, moonAbsLon) {
-    const moonSpeed = getMoonSpeedDegPerMinute();
+  function buildExactCandidateFromCurrent() {
+    const exact =
+      decision.exact_time_candidate_utc ||
+      timing.exact_time_candidate_utc ||
+      timing.time_window?.start_utc ||
+      null;
 
-    // 3 forward probes
-    const probes = [10, 20, 30].map((mins) => {
-      const projectedMoon = normalize360(moonAbsLon + moonSpeed * mins);
-      const projectedDegree = projectedMoon % 30;
-      const nearestInteger = Math.round(projectedDegree);
-      const gap = Math.abs(projectedDegree - nearestInteger);
+    if (!exact) return null;
 
-      return {
-        minute_offset: mins,
-        projected_time_utc: toISO(addMinutes(baseTime, mins)),
-        projected_moon_longitude: round(projectedMoon, 6),
-        projected_degree_in_sign: round(projectedDegree, 6),
-        nearest_degree_lock: nearestInteger,
-        degree_gap: round(gap, 6),
-        strength_score: round(Math.max(0, 1 - gap / 0.25), 6)
-      };
-    });
-
-    const best = [...probes].sort((a, b) => a.degree_gap - b.degree_gap)[0];
-
-    if (!best || best.degree_gap > 0.25) {
-      return {
-        activated: true,
-        snapshot_count: 3,
-        mode: "NO_FUTURE_CLUSTER",
-        best_probe: best || null,
-        candidate: null
-      };
-    }
-
-    const confidence =
-      best.degree_gap <= 0.05 ? "HIGH" :
-      best.degree_gap <= 0.12 ? "MEDIUM" : "LOW";
-
-    const candidate = buildCandidate({
-      kind: "multi_snapshot_predictive_merge",
-      predictedTime: new Date(best.projected_time_utc),
-      confidence,
-      strength: best.strength_score,
-      reason: "3 forward probes found nearest future moon degree cluster",
+    return buildCandidate({
+      kind: "existing_live_exact_trigger",
+      time: exact,
+      confidence: "HIGH",
+      strength: 0.99,
+      reason: "Existing live exact/minute candidate preserved",
       details: {
-        snapshot_count: 3,
-        nearest_degree_lock: best.nearest_degree_lock,
-        degree_gap: best.degree_gap
+        source: "timing_decision_or_timing_evidence",
+        dominant_trigger_identity: timing.dominant_trigger_identity || null
       }
     });
-
-    return {
-      activated: true,
-      snapshot_count: 3,
-      mode: "FUTURE_CLUSTER_FOUND",
-      best_probe: best,
-      candidate
-    };
   }
 
-  function nakshatraBoundaryPredict(baseTime, moonAbsLon) {
-    const moonSpeed = getMoonSpeedDegPerMinute();
-    const nak = buildNakshatraData(moonAbsLon);
+  function moonDegreePredict() {
+    const moon = planets.moon;
+    const lon = absoluteLongitude(moon);
+    if (lon == null) return null;
 
-    const distanceToNextPada = PADA_SIZE - (nak.offsetInNak % PADA_SIZE);
-    const minutesToNextPada = distanceToNextPada / moonSpeed;
+    const speed = Math.abs(speedDegPerMinute(moon, 13.2));
+    if (speed <= 0) return null;
 
-    const distanceToNextNak = NAK_SIZE - nak.offsetInNak;
-    const minutesToNextNak = distanceToNextNak / moonSpeed;
+    const degreeInSign = lon % 30;
+    const nextDegree = Math.ceil(degreeInSign);
+    const targetDegree = nextDegree >= 30 ? 0 : nextDegree;
+    const gap = nextDegree >= 30 ? 30 - degreeInSign : nextDegree - degreeInSign;
 
-    const nextPadaTime = addMinutes(baseTime, minutesToNextPada);
-    const nextNakTime = addMinutes(baseTime, minutesToNextNak);
+    if (gap <= 0.0001) return null;
 
-    const nextNakLongitude = normalize360(moonAbsLon + moonSpeed * minutesToNextNak);
-    const nextNakData = buildNakshatraData(nextNakLongitude);
+    const mins = gap / speed;
 
-    const padaCandidate = buildCandidate({
-      kind: "moon_pada_boundary",
-      predictedTime: nextPadaTime,
-      confidence: minutesToNextPada <= 20 ? "HIGH" : minutesToNextPada <= 45 ? "MEDIUM" : "LOW",
-      strength: minutesToNextPada <= 20 ? 0.84 : minutesToNextPada <= 45 ? 0.68 : 0.52,
-      reason: "future moon pada change detected",
+    return buildCandidate({
+      kind: "moon_degree_lock_future",
+      time: addMinutes(baseTime, mins),
+      confidence: confidenceFromMinutes(mins, 20, 75),
+      strength: mins <= 20 ? 0.9 : mins <= 75 ? 0.72 : 0.55,
+      reason: "Moon approaching next exact degree lock",
       details: {
-        current_nakshatra: nak.nakshatra,
-        current_pada: nak.pada,
-        next_event: "pada_change"
+        current_degree_in_sign: round(degreeInSign, 6),
+        nearest_degree_lock: targetDegree,
+        gap_degrees: round(gap, 6)
       }
     });
-
-    const nakCandidate = buildCandidate({
-      kind: "moon_nakshatra_boundary",
-      predictedTime: nextNakTime,
-      confidence: minutesToNextNak <= 30 ? "HIGH" : minutesToNextNak <= 75 ? "MEDIUM" : "LOW",
-      strength: minutesToNextNak <= 30 ? 0.88 : minutesToNextNak <= 75 ? 0.7 : 0.55,
-      reason: "future moon nakshatra change detected",
-      details: {
-        current_nakshatra: nak.nakshatra,
-        next_nakshatra: nextNakData.nakshatra,
-        next_event: "nakshatra_change"
-      }
-    });
-
-    return {
-      activated: true,
-      current: {
-        nakshatra: nak.nakshatra,
-        pada: nak.pada
-      },
-      candidates: [padaCandidate, nakCandidate]
-    };
   }
 
-  function aspectApproachTiming(baseTime, p1Abs, p2Abs, p1SpeedPerMin, p2SpeedPerMin, label, targetAngle) {
-    if (p1Abs == null || p2Abs == null) return null;
+  function moonPadaNakshatraPredict() {
+    const moon = planets.moon;
+    const lon = absoluteLongitude(moon);
+    if (lon == null) return [];
 
-    const relativeSpeed = Math.abs(p1SpeedPerMin - p2SpeedPerMin);
-    if (relativeSpeed <= 0) {
-      return {
-        activated: true,
-        pair: label,
-        mode: "STATIC",
-        candidate: null
-      };
-    }
+    const speed = Math.abs(speedDegPerMinute(moon, 13.2));
+    if (speed <= 0) return [];
 
-    const currentDiff = diff360(p1Abs, p2Abs);
-    const gap = Math.abs(currentDiff - targetAngle);
-    const minutesToHit = gap / relativeSpeed;
-    const predictedTime = addMinutes(baseTime, minutesToHit);
+    const nak = getNakData(lon);
+    const gapPada = PADA_SIZE - (nak.offset_in_nak % PADA_SIZE);
+    const gapNak = NAK_SIZE - nak.offset_in_nak;
 
-    const confidence =
-      gap <= 0.5 ? "HIGH" :
-      gap <= 1.2 ? "MEDIUM" : "LOW";
+    const minsPada = gapPada / speed;
+    const minsNak = gapNak / speed;
 
-    const strength =
-      gap <= 0.5 ? 0.86 :
-      gap <= 1.2 ? 0.68 : 0.5;
+    const nextNakLon = normalize360(lon + gapNak);
+    const nextNak = getNakData(nextNakLon);
 
-    const candidate = buildCandidate({
+    return [
+      buildCandidate({
+        kind: "moon_pada_boundary_future",
+        time: addMinutes(baseTime, minsPada),
+        confidence: confidenceFromMinutes(minsPada, 30, 120),
+        strength: minsPada <= 30 ? 0.86 : minsPada <= 120 ? 0.7 : 0.52,
+        reason: "Moon approaching pada boundary",
+        details: {
+          current_nakshatra: nak.nakshatra,
+          current_pada: nak.pada,
+          next_event: "pada_change",
+          gap_degrees: round(gapPada, 6)
+        }
+      }),
+      buildCandidate({
+        kind: "moon_nakshatra_boundary_future",
+        time: addMinutes(baseTime, minsNak),
+        confidence: confidenceFromMinutes(minsNak, 45, 180),
+        strength: minsNak <= 45 ? 0.88 : minsNak <= 180 ? 0.72 : 0.54,
+        reason: "Moon approaching nakshatra boundary",
+        details: {
+          current_nakshatra: nak.nakshatra,
+          next_nakshatra: nextNak.nakshatra,
+          next_event: "nakshatra_change",
+          gap_degrees: round(gapNak, 6)
+        }
+      })
+    ].filter(Boolean);
+  }
+
+  function aspectApproach({ p1Name, p2Name, targetAngle, aspectName }) {
+    const p1 = planets[p1Name.toLowerCase()];
+    const p2 = planets[p2Name.toLowerCase()];
+    const p1Lon = absoluteLongitude(p1);
+    const p2Lon = absoluteLongitude(p2);
+
+    if (p1Lon == null || p2Lon == null) return null;
+
+    const p1Speed = speedDegPerMinute(p1, defaultDailySpeed(p1Name));
+    const p2Speed = speedDegPerMinute(p2, defaultDailySpeed(p2Name));
+
+    const nowDelta = signedAspectDelta(p1Lon, p2Lon, targetAngle);
+    const futureDelta = signedAspectDelta(
+      normalize360(p1Lon + p1Speed),
+      normalize360(p2Lon + p2Speed),
+      targetAngle
+    );
+
+    const approaching = Math.abs(futureDelta) < Math.abs(nowDelta);
+    if (!approaching) return null;
+
+    const relativeSpeed = Math.abs(p1Speed - p2Speed);
+    if (relativeSpeed <= 0) return null;
+
+    const gap = Math.abs(nowDelta);
+    if (gap > 8) return null;
+
+    const mins = gap / relativeSpeed;
+
+    return buildCandidate({
       kind: "aspect_approach_timing",
-      predictedTime,
-      confidence,
-      strength,
-      reason: `${label} approaching ${targetAngle}° aspect zone`,
+      time: addMinutes(baseTime, mins),
+      confidence: gap <= 0.5 ? "HIGH" : gap <= 1.5 ? "MEDIUM" : "LOW",
+      strength: gap <= 0.5 ? 0.9 : gap <= 1.5 ? 0.72 : 0.5,
+      reason: `${p1Name}-${p2Name} approaching ${aspectName}`,
       details: {
-        pair: label,
-        current_angle_diff: round(currentDiff, 6),
+        pair: `${p1Name}-${p2Name}`,
+        aspect: aspectName,
         target_angle: targetAngle,
+        current_angle_diff: round(angularDiff(p1Lon, p2Lon), 6),
         aspect_gap: round(gap, 6),
-        estimated_minutes: round(minutesToHit, 3)
+        estimated_minutes: round(mins, 3),
+        applying: true
       }
     });
-
-    return {
-      activated: true,
-      pair: label,
-      mode: "APPROACH",
-      candidate
-    };
   }
 
-  // hard guard: existing exact stays exact
-  if (
-    decision?.mode === "exact_candidate" ||
-    packet?.smart_mode?.mode === "EXACT_LOCK" ||
-    packet?.timing_evidence?.precision_allowed === "minute_candidate"
-  ) {
-    packet.predictive_smart_mode = {
-      activated: true,
-      mode: "BYPASS_EXISTING_EXACT",
-      reason: "existing exact or minute candidate already present",
-      best_future_candidate: decision?.exact_time || packet?.timing_evidence?.peakTime || null,
-      modules: {
-        multi_snapshot_predictive_merge: null,
-        nakshatra_boundary_trigger: null,
-        aspect_approach_timing: null
-      }
+  function defaultDailySpeed(name) {
+    const map = {
+      Sun: 1,
+      Moon: 13.2,
+      Mercury: 1.2,
+      Venus: 1.1,
+      Mars: 0.5,
+      Jupiter: 0.08,
+      Saturn: 0.03,
+      Rahu: -0.03,
+      Ketu: -0.03
     };
-    return packet;
+    return map[name] ?? 0;
   }
 
-  const moonAbs = absoluteLongitude(moon);
-  const marsAbs = absoluteLongitude(mars);
-  const mercuryAbs = absoluteLongitude(mercury);
-  const rahuAbs = absoluteLongitude(rahu);
+  const existingExact =
+    decision.mode === "exact_candidate" ||
+    timing.precision_allowed === "minute_candidate" ||
+    packet?.smart_mode?.mode === "EXACT_LOCK";
 
-  const multiSnapshotModule = moonAbs != null
-    ? multiSnapshotPredictiveMerge(timestamp, moonAbs)
-    : {
-        activated: true,
-        mode: "UNAVAILABLE",
-        best_probe: null,
-        candidate: null
-      };
+  const currentExactCandidate = existingExact ? buildExactCandidateFromCurrent() : null;
 
-  const nakshatraBoundaryModule = moonAbs != null
-    ? nakshatraBoundaryPredict(timestamp, moonAbs)
-    : {
-        activated: true,
-        current: null,
-        candidates: []
-      };
+  const candidates = [
+    currentExactCandidate,
+    moonDegreePredict(),
+    ...moonPadaNakshatraPredict(),
 
-  const marsMoonModule = aspectApproachTiming(
-    timestamp,
-    marsAbs,
-    moonAbs,
-    getMarsSpeedDegPerMinute(),
-    getMoonSpeedDegPerMinute(),
-    "Mars-Moon",
-    90
-  );
-
-  const rahuMercuryModule = aspectApproachTiming(
-    timestamp,
-    rahuAbs,
-    mercuryAbs,
-    getRahuSpeedDegPerMinute(),
-    getMercurySpeedDegPerMinute(),
-    "Rahu-Mercury",
-    0
-  );
-
-  const candidatePool = [
-    multiSnapshotModule?.candidate || null,
-    ...(nakshatraBoundaryModule?.candidates || []),
-    marsMoonModule?.candidate || null,
-    rahuMercuryModule?.candidate || null
+    aspectApproach({ p1Name: "Moon", p2Name: "Mars", targetAngle: 90, aspectName: "square" }),
+    aspectApproach({ p1Name: "Moon", p2Name: "Mercury", targetAngle: 0, aspectName: "conjunction" }),
+    aspectApproach({ p1Name: "Moon", p2Name: "Rahu", targetAngle: 0, aspectName: "conjunction" }),
+    aspectApproach({ p1Name: "Mercury", p2Name: "Rahu", targetAngle: 0, aspectName: "conjunction" }),
+    aspectApproach({ p1Name: "Mars", p2Name: "Rahu", targetAngle: 0, aspectName: "conjunction" }),
+    aspectApproach({ p1Name: "Sun", p2Name: "Saturn", targetAngle: 0, aspectName: "conjunction" }),
+    aspectApproach({ p1Name: "Venus", p2Name: "Jupiter", targetAngle: 120, aspectName: "trine" })
   ].filter(Boolean);
 
-  const best = pickBestCandidate(candidatePool);
+  const best = pickBest(candidates);
 
-  let finalMode = "NO_PREDICTIVE_UNLOCK";
-  let finalReason = "no future trigger candidate strong enough";
+  let mode = "NO_PREDICTIVE_UNLOCK";
+  let reason = "No future trigger candidate strong enough";
   let smartTimeOutput = null;
 
-  if (best) {
+  if (currentExactCandidate) {
+    mode = "BYPASS_EXISTING_EXACT";
+    reason = "Existing live exact trigger preserved as primary";
+    smartTimeOutput = currentExactCandidate.predicted_time_utc;
+  } else if (best) {
     if (best.confidence === "HIGH") {
-      finalMode = "PREDICTIVE_EXACT_CANDIDATE";
-      finalReason = "strong future trigger candidate projected";
+      mode = "PREDICTIVE_EXACT_CANDIDATE";
+      reason = "Strong future trigger candidate projected";
       smartTimeOutput = best.predicted_time_utc;
     } else if (best.confidence === "MEDIUM") {
-      finalMode = "PREDICTIVE_REFINED_WINDOW";
-      finalReason = "moderate future trigger candidate projected";
-      const peak = new Date(best.predicted_time_utc);
+      mode = "PREDICTIVE_REFINED_WINDOW";
+      reason = "Moderate future trigger candidate projected";
+      const peak = parseDate(best.predicted_time_utc);
       smartTimeOutput = {
-        start_utc: toISO(addMinutes(peak, -5)),
-        end_utc: toISO(addMinutes(peak, 5))
+        start_utc: toISO(addMinutes(peak, -7)),
+        end_utc: toISO(addMinutes(peak, 7))
       };
     } else {
-      finalMode = "PREDICTIVE_WIDE_WINDOW";
-      finalReason = "weak but usable future timing candidate projected";
-      const peak = new Date(best.predicted_time_utc);
+      mode = "PREDICTIVE_WIDE_WINDOW";
+      reason = "Weak but usable future trigger candidate projected";
+      const peak = parseDate(best.predicted_time_utc);
       smartTimeOutput = {
-        start_utc: toISO(addMinutes(peak, -12)),
-        end_utc: toISO(addMinutes(peak, 12))
+        start_utc: toISO(addMinutes(peak, -15)),
+        end_utc: toISO(addMinutes(peak, 15))
       };
     }
   }
 
   packet.predictive_smart_mode = {
+    version: VERSION,
     activated: true,
-    mode: finalMode,
-    reason: finalReason,
-    best_future_candidate: best,
+    mode,
+    reason,
+    best_future_candidate: best || currentExactCandidate || null,
     smart_time_output: smartTimeOutput,
-    modules: {
-      multi_snapshot_predictive_merge: multiSnapshotModule,
-      nakshatra_boundary_trigger: nakshatraBoundaryModule,
-      aspect_approach_timing: {
-        mars_moon: marsMoonModule,
-        rahu_mercury: rahuMercuryModule
-      }
+    candidate_pool: dedupe(candidates),
+    predictive_status:
+      best || currentExactCandidate ? "TRIGGER_CANDIDATE_AVAILABLE" : "NO_CLEAN_TRIGGER",
+    predictive_priority:
+      currentExactCandidate ? "SECONDARY_TO_PRESENT_EXACT" : "PRIMARY_FUTURE_SUPPORT",
+    safeguards: {
+      existing_exact_preserved: Boolean(currentExactCandidate),
+      separating_aspects_rejected: true,
+      real_planet_speed_used_when_available: true,
+      max_horizon_minutes: MAX_HORIZON_MINUTES,
+      downstream_best_future_candidate_is_object: true
     }
   };
 
