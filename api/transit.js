@@ -1,6 +1,6 @@
 import swe from "swisseph-v2";
 
-const ENGINE_STATUS = "UNIVERSAL_LIVE_TRANSIT_ORACLE_V9_ELITE_INPUT_NORMALIZED";
+const ENGINE_STATUS = "UNIVERSAL_LIVE_TRANSIT_ORACLE_V9_1_GPT_SAFE_RAW_PACKET";
 
 const SIGNS = [
   "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -116,6 +116,16 @@ function cleanNullable(v) {
   return s ? s : null;
 }
 
+function getOutputMode(req) {
+  const mode = norm(req.query?.mode || req.query?.format || req.query?.packet).toLowerCase();
+
+  if (["debug", "full_debug", "developer"].includes(mode)) return "debug";
+  if (["compact", "short", "summary"].includes(mode)) return "compact";
+  if (["raw", "json", "full", "transit", "packet", "full_packet"].includes(mode)) return "raw";
+
+  return "raw";
+}
+
 function normalize360(value) {
   let result = value % 360;
   if (result < 0) result += 360;
@@ -158,7 +168,7 @@ function buildNameProfile(rawName) {
     O: "Pisces", Z: "Pisces", F: "Pisces"
   };
 
-  const derivedRashi = rashiByFirst || null;
+  const derivedRashi = firstLetter ? rashiByFirst[firstLetter] || null : null;
 
   return {
     raw_name: rawName || null,
@@ -594,32 +604,19 @@ function buildDivisionalContext(birthDateTime, lat, lon, flags) {
     swe.SE_GREG_CAL
   );
 
-  const sun = calcPlanet(birthJd, swe.SE_SUN, flags);
-  const moon = calcPlanet(birthJd, swe.SE_MOON, flags);
-  const mercury = calcPlanet(birthJd, swe.SE_MERCURY, flags);
-  const venus = calcPlanet(birthJd, swe.SE_VENUS, flags);
-  const mars = calcPlanet(birthJd, swe.SE_MARS, flags);
-  const jupiter = calcPlanet(birthJd, swe.SE_JUPITER, flags);
-  const saturn = calcPlanet(birthJd, swe.SE_SATURN, flags);
-  const rahu = calcPlanet(birthJd, swe.SE_TRUE_NODE, flags);
-  const ketuLongitude = normalize360(rahu.longitude + 180);
-
-  const birthHousesRaw = swe.swe_houses(birthJd, lat, lon, "P");
-  const birthHousesArray = parseHouseResult(birthHousesRaw);
-  const ascendantLongitude = normalize360(birthHousesArray[1]);
-
   const sourcePlanets = {
-    ascendant: ascendantLongitude,
-    sun: sun.longitude,
-    moon: moon.longitude,
-    mercury: mercury.longitude,
-    venus: venus.longitude,
-    mars: mars.longitude,
-    jupiter: jupiter.longitude,
-    saturn: saturn.longitude,
-    rahu: rahu.longitude,
-    ketu: ketuLongitude
+    ascendant: normalize360(parseHouseResult(swe.swe_houses(birthJd, lat, lon, "P"))[1]),
+    sun: calcPlanet(birthJd, swe.SE_SUN, flags).longitude,
+    moon: calcPlanet(birthJd, swe.SE_MOON, flags).longitude,
+    mercury: calcPlanet(birthJd, swe.SE_MERCURY, flags).longitude,
+    venus: calcPlanet(birthJd, swe.SE_VENUS, flags).longitude,
+    mars: calcPlanet(birthJd, swe.SE_MARS, flags).longitude,
+    jupiter: calcPlanet(birthJd, swe.SE_JUPITER, flags).longitude,
+    saturn: calcPlanet(birthJd, swe.SE_SATURN, flags).longitude,
+    rahu: calcPlanet(birthJd, swe.SE_TRUE_NODE, flags).longitude
   };
+
+  sourcePlanets.ketu = normalize360(sourcePlanets.rahu + 180);
 
   const divisional = {
     status: "active",
@@ -657,11 +654,7 @@ function buildMicroAspectTriggers(baseDate, jd, flags) {
         const gap = Math.abs(diff - target.angle);
 
         if (!best || gap < best.gap) {
-          best = {
-            gap,
-            offset,
-            exact_angle: round(diff, 6)
-          };
+          best = { gap, offset, exact_angle: round(diff, 6) };
         }
       }
 
@@ -776,11 +769,7 @@ function dedupeMicroTriggers(triggers) {
     }
   }
 
-  return unique.sort((a, b) => {
-    const ta = new Date(a.exact_time_utc).getTime();
-    const tb = new Date(b.exact_time_utc).getTime();
-    return ta - tb;
-  });
+  return unique.sort((a, b) => new Date(a.exact_time_utc).getTime() - new Date(b.exact_time_utc).getTime());
 }
 
 function buildTriggerSignature(trigger) {
@@ -803,13 +792,10 @@ function finalizeCluster(cluster) {
 
   let peakItem = cluster.items[0];
   for (const item of cluster.items) {
-    const currentScore = item.strength_score ?? 0;
-    const bestScore = peakItem?.strength_score ?? 0;
-    if (currentScore > bestScore) peakItem = item;
+    if ((item.strength_score ?? 0) > (peakItem?.strength_score ?? 0)) peakItem = item;
   }
 
-  const averageStrength =
-    cluster.items.reduce((sum, item) => sum + (item.strength_score ?? 0), 0) / cluster.items.length;
+  const averageStrength = cluster.items.reduce((sum, item) => sum + (item.strength_score ?? 0), 0) / cluster.items.length;
 
   return {
     type: cluster.type,
@@ -892,13 +878,11 @@ function clusterMicroTriggers(triggers) {
 function getDominantCluster(clusters) {
   if (!clusters.length) return null;
 
-  const ranked = [...clusters].sort((a, b) => {
+  return [...clusters].sort((a, b) => {
     if (b.peak_strength !== a.peak_strength) return b.peak_strength - a.peak_strength;
     if (b.hit_count !== a.hit_count) return b.hit_count - a.hit_count;
     return b.average_strength - a.average_strength;
-  });
-
-  return ranked[0];
+  })[0];
 }
 
 function buildSubjectMode({ name, dob, tob, birthDateTime }) {
@@ -958,9 +942,84 @@ function buildSubjectMode({ name, dob, tob, birthDateTime }) {
   };
 }
 
+function buildGptSafeTransitPacket(result, outputMode = "raw") {
+  if (outputMode === "debug") {
+    return {
+      ...result,
+      packet_policy: {
+        output_mode: "DEBUG_FULL",
+        micro_triggers_included: true,
+        warning: "This mode may be too large for GPT/action usage."
+      }
+    };
+  }
+
+  const safe = { ...result };
+  delete safe.micro_triggers;
+
+  if (Array.isArray(safe.micro_clusters)) {
+    safe.micro_clusters = safe.micro_clusters.slice(0, 5);
+  }
+
+  safe.packet_policy = {
+    output_mode: outputMode === "compact" ? "COMPACT_GPT_SAFE" : "RAW_GPT_SAFE",
+    full_debug_available_with: "mode=debug",
+    micro_triggers_removed: true,
+    micro_clusters_limited_to: outputMode === "compact" ? 3 : 5,
+    reason: "micro_triggers array is too large and repetitive for GPT/action usage"
+  };
+
+  if (outputMode === "compact") {
+    safe.micro_clusters = Array.isArray(safe.micro_clusters) ? safe.micro_clusters.slice(0, 3) : [];
+
+    return {
+      engine_status: safe.engine_status,
+      system_status: safe.system_status,
+      mode: safe.mode,
+      oracle_mode: safe.oracle_mode,
+      subject_mode: safe.subject_mode,
+      identity_depth: safe.identity_depth,
+      precision_mode: safe.precision_mode,
+      input_normalized: safe.input_normalized,
+      authority: safe.authority,
+      quality: safe.quality,
+      freshness: safe.freshness,
+      integrity: safe.integrity,
+      location_used: safe.location_used,
+      panchanga: safe.panchanga,
+      sun: safe.sun,
+      moon: safe.moon,
+      mercury: safe.mercury,
+      venus: safe.venus,
+      mars: safe.mars,
+      jupiter: safe.jupiter,
+      saturn: safe.saturn,
+      rahu: safe.rahu,
+      ketu: safe.ketu,
+      ascendant: safe.ascendant,
+      houses: safe.houses,
+      kp_cusps: safe.kp_cusps,
+      dasha: safe.dasha,
+      divisional: safe.divisional?.status ? safe.divisional : { status: "compressed_or_absent" },
+      aspects: safe.aspects,
+      strength: safe.strength,
+      micro_window: safe.micro_window,
+      micro_status: safe.micro_status,
+      micro_convergence: safe.micro_convergence,
+      micro_dominant_trigger: safe.micro_dominant_trigger,
+      micro_clusters: safe.micro_clusters,
+      live_elite_packet: safe.live_elite_packet,
+      packet_policy: safe.packet_policy
+    };
+  }
+
+  return safe;
+}
+
 export default async function handler(req, res) {
   try {
     const now = new Date();
+    const outputMode = getOutputMode(req);
 
     const name = cleanNullable(req.query?.name);
     const dob = normalizeDob(req.query?.dob);
@@ -1286,7 +1345,7 @@ export default async function handler(req, res) {
           : "Name-only live can show strong field and trigger, but natal dasha/divisional permission remains closed."
     };
 
-    return res.status(200).json(result);
+    return res.status(200).json(buildGptSafeTransitPacket(result, outputMode));
   } catch (error) {
     return res.status(500).json({
       engine_status: ENGINE_STATUS,
