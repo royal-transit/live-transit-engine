@@ -1,8 +1,8 @@
 export default async function handler(req, res) {
   try {
-    const ENGINE_STATUS = "ROYEL_SPIRITUAL_ALIGNMENT_ENGINE_V5_MAX_DESTINY";
+    const ENGINE_STATUS = "ROYEL_SPIRITUAL_ALIGNMENT_ENGINE_V10_FULL_FINAL";
 
-    const ROYEL = {
+    const PROFILE = {
       name: "Md Manjurul Karim Royel",
       daily_name: "Royel",
       dob: "1988-12-11",
@@ -14,43 +14,42 @@ export default async function handler(req, res) {
       current_timezone: "Europe/London",
       current_latitude: 51.1486,
       current_longitude: 0.8728,
-      path: "Naqshbandi Silent Depth + Public Spiritual Authority + Hybrid Sufi Discipline",
-      destiny: "Inner basirah + public magnetism + remedy craft + client-reading authority",
-      strictness: "HIGH"
+      destiny_path:
+        "Inner silence + basirah + public magnetism + spiritual authority + remedy intelligence + client-reading power",
+      core_frequency:
+        "Ya Latif + Ya Basir + Ya Wadud + Salawat"
     };
 
     const now = new Date();
 
-    function q(extra = {}) {
+    function qs(extra = {}) {
       return new URLSearchParams({
         name: "Royel",
-        dob: ROYEL.dob,
+        dob: PROFILE.dob,
         tob: "10:59:00",
-        pob: ROYEL.pob,
-        birth_datetime: ROYEL.birth_datetime,
+        pob: PROFILE.pob,
+        birth_datetime: PROFILE.birth_datetime,
         timezone_offset: "+06:00",
-        latitude: String(ROYEL.current_latitude),
-        longitude: String(ROYEL.current_longitude),
+        latitude: String(PROFILE.current_latitude),
+        longitude: String(PROFILE.current_longitude),
         current_datetime_iso: now.toISOString(),
         ...extra
       }).toString();
     }
 
-    const transitUrl =
-      "https://live-transit-engine.vercel.app/api/transit?" + q({ mode: "raw" });
+    const transitURL =
+      "https://live-transit-engine.vercel.app/api/transit?" +
+      qs({ mode: "raw" });
 
-    const oracleUrl =
+    const oracleURL =
       "https://live-transit-engine.vercel.app/api/oracle?" +
-      q({
+      qs({
         question:
-          "Royel max spiritual destiny alignment, basirah, public attraction, dream gate, remedy craft, intuition, protection, rizq, timing"
+          "Royel full final spiritual destiny alignment, basirah, public magnetism, dream, remedy, lunar, food, material, namaz, timing, validation"
       });
 
-    const transitResponse = await fetch(transitUrl);
-    const transitData = await transitResponse.json();
-
-    const oracleResponse = await fetch(oracleUrl);
-    const oracleData = await oracleResponse.json();
+    const transitData = await (await fetch(transitURL)).json();
+    const oracleData = await (await fetch(oracleURL)).json();
 
     const moon = transitData?.moon || {};
     const sun = transitData?.sun || {};
@@ -68,21 +67,31 @@ export default async function handler(req, res) {
       oracleData?.micro_dominant_trigger?.type ||
       null;
 
-    const micro = transitData?.micro_dominant_trigger || null;
-
-    const oracleClassification =
-      oracleData?.final_classification ||
-      oracleData?.oracle_verdict?.final_classification ||
-      oracleData?.courtroom_packet?.final_verdict_lock ||
-      oracleData?.signal_reduction_result ||
-      null;
-
-    function add(s, k, v) {
-      s[k] = (s[k] || 0) + v;
+    function add(obj, key, value) {
+      obj[key] = (obj[key] || 0) + value;
     }
 
-    function has(p) {
-      return !!(p?.sign || p?.nakshatra || p?.nakshatra_lord);
+    function rank(obj) {
+      return Object.entries(obj)
+        .sort((a, b) => b[1] - a[1])
+        .map(([gate, score]) => ({ gate, score }));
+    }
+
+    function level(score) {
+      if (score >= 18) return "DESTINY_PEAK";
+      if (score >= 14) return "VERY_HIGH";
+      if (score >= 10) return "HIGH";
+      if (score >= 6) return "MEDIUM";
+      if (score >= 3) return "LIGHT";
+      return "LOW";
+    }
+
+    function permission(score) {
+      if (score >= 14) return "WIDE_OPEN";
+      if (score >= 10) return "OPEN";
+      if (score >= 6) return "BUILDING";
+      if (score >= 3) return "SUPPORT";
+      return "QUIET";
     }
 
     function phaseFromTithi(tithi) {
@@ -93,30 +102,7 @@ export default async function handler(req, res) {
       if (n <= 7) return "GROWING_SEED_FIELD";
       if (n <= 14) return "BUILDING_FIELD";
       if (n <= 22) return "RELEASING_FIELD";
-      return "DARKENING_PURIFICATION_FIELD";
-    }
-
-    function rank(obj) {
-      return Object.entries(obj)
-        .sort((a, b) => b[1] - a[1])
-        .map(([gate, score]) => ({ gate, score }));
-    }
-
-    function level(score) {
-      if (score >= 14) return "DESTINY_PEAK";
-      if (score >= 10) return "VERY_HIGH";
-      if (score >= 7) return "HIGH";
-      if (score >= 4) return "MEDIUM";
-      if (score >= 2) return "LIGHT";
-      return "LOW";
-    }
-
-    function status(score) {
-      if (score >= 10) return "WIDE_OPEN";
-      if (score >= 7) return "OPEN";
-      if (score >= 4) return "BUILDING";
-      if (score >= 2) return "SUPPORT";
-      return "QUIET";
+      return "DARK_PURIFICATION_FIELD";
     }
 
     function parts(date, timeZone) {
@@ -172,7 +158,7 @@ export default async function handler(req, res) {
       };
     }
 
-    const lunarPhase = phaseFromTithi(panchanga?.tithi);
+    const lunarField = phaseFromTithi(panchanga?.tithi);
 
     const scores = {
       divine_connection: 0,
@@ -196,45 +182,55 @@ export default async function handler(req, res) {
       discipline: 0,
       hidden_knowledge: 0,
       lunar_power: 0,
-      spiritual_action_permission: 0
+      namaz_enhancement: 0,
+      tahajjud_gate: 0,
+      food_alignment: 0,
+      material_alignment: 0,
+      planetary_hour_need: 0,
+      field_resonance: 0,
+      sacred_space: 0,
+      overload_risk: 0,
+      validation_need: 0,
+      practice_memory_need: 0
     };
 
     if (moon?.dignity === "exalted") {
       add(scores, "divine_connection", 4);
-      add(scores, "basirah", 4);
+      add(scores, "basirah", 5);
       add(scores, "dream_vision", 3);
       add(scores, "client_reading_power", 3);
       add(scores, "emotional_control", 4);
-      add(scores, "lunar_power", 5);
-      add(scores, "trust_building", 2);
+      add(scores, "lunar_power", 6);
+      add(scores, "food_alignment", 2);
     }
 
-    if (lunarPhase === "FULL_MOON_FIELD") {
-      add(scores, "dream_vision", 5);
-      add(scores, "lunar_power", 5);
-      add(scores, "mass_attraction", 2);
-      add(scores, "public_presence", 2);
+    if (lunarField === "NEW_MOON_FIELD") {
+      add(scores, "protection", 6);
+      add(scores, "grounding", 5);
+      add(scores, "hidden_knowledge", 4);
+      add(scores, "taweez_symbolic_sensitivity", 3);
+      add(scores, "sacred_space", 4);
     }
 
-    if (lunarPhase === "NEW_MOON_FIELD" || lunarPhase === "DARKENING_PURIFICATION_FIELD") {
-      add(scores, "protection", 5);
-      add(scores, "grounding", 4);
-      add(scores, "hidden_knowledge", 3);
-      add(scores, "taweez_symbolic_sensitivity", 2);
+    if (lunarField === "FULL_MOON_FIELD") {
+      add(scores, "dream_vision", 6);
+      add(scores, "lunar_power", 6);
+      add(scores, "tahajjud_gate", 5);
+      add(scores, "mass_attraction", 3);
+      add(scores, "public_presence", 3);
     }
 
     if (moon?.nakshatra_lord === "Sun" || sun?.nakshatra_lord === "Sun") {
       add(scores, "public_presence", 5);
-      add(scores, "spiritual_authority", 4);
+      add(scores, "spiritual_authority", 5);
       add(scores, "prediction_intuition", 3);
       add(scores, "speech_control", 2);
       add(scores, "reputation_growth", 4);
-      add(scores, "spiritual_action_permission", 3);
     }
 
     if (dominantTrigger === "moon_mercury_conjunction") {
-      add(scores, "basirah", 5);
-      add(scores, "prediction_intuition", 5);
+      add(scores, "basirah", 6);
+      add(scores, "prediction_intuition", 6);
       add(scores, "client_reading_power", 6);
       add(scores, "speech_control", 5);
       add(scores, "voice_magnetism", 4);
@@ -242,89 +238,68 @@ export default async function handler(req, res) {
     }
 
     if (dominantTrigger === "moon_degree_lock") {
-      add(scores, "lunar_power", 6);
+      add(scores, "lunar_power", 7);
       add(scores, "divine_connection", 4);
-      add(scores, "mass_attraction", 3);
-      add(scores, "public_presence", 3);
-      add(scores, "basirah", 3);
-      add(scores, "spiritual_action_permission", 5);
+      add(scores, "mass_attraction", 4);
+      add(scores, "public_presence", 4);
+      add(scores, "basirah", 4);
     }
 
     if (mercury?.combust) {
-      add(scores, "speech_control", 5);
-      add(scores, "client_reading_power", 2);
-      add(scores, "remedy_crafting", 1);
-      add(scores, "voice_magnetism", -1);
-    }
-
-    if (has(venus)) {
-      add(scores, "mass_attraction", 4);
-      add(scores, "voice_magnetism", 4);
-      add(scores, "trust_building", 3);
-      add(scores, "remedy_crafting", 2);
-      add(scores, "public_presence", 2);
+      add(scores, "speech_control", 6);
+      add(scores, "overload_risk", 3);
+      add(scores, "validation_need", 2);
     }
 
     if (venus?.sign === "Gemini") {
-      add(scores, "social_media_influence", 5);
-      add(scores, "voice_magnetism", 4);
+      add(scores, "social_media_influence", 6);
+      add(scores, "voice_magnetism", 5);
       add(scores, "client_reading_power", 3);
-      add(scores, "mass_attraction", 3);
-    }
-
-    if (has(jupiter)) {
-      add(scores, "divine_connection", 4);
-      add(scores, "rizq_alignment", 5);
-      add(scores, "trust_building", 5);
-      add(scores, "reputation_growth", 4);
-      add(scores, "public_presence", 3);
-      add(scores, "spiritual_action_permission", 3);
+      add(scores, "mass_attraction", 5);
+      add(scores, "public_presence", 2);
     }
 
     if (jupiter?.nakshatra_lord === "Jupiter") {
+      add(scores, "divine_connection", 4);
+      add(scores, "rizq_alignment", 6);
+      add(scores, "trust_building", 5);
+      add(scores, "reputation_growth", 5);
+      add(scores, "remedy_crafting", 4);
       add(scores, "spiritual_authority", 4);
-      add(scores, "remedy_crafting", 3);
-      add(scores, "mass_attraction", 3);
     }
 
-    if (saturn?.sign === "Pisces" || saturn?.nakshatra_lord === "Saturn") {
-      add(scores, "grounding", 5);
-      add(scores, "discipline", 6);
+    if (saturn?.nakshatra_lord === "Saturn" || saturn?.sign === "Pisces") {
+      add(scores, "grounding", 6);
+      add(scores, "discipline", 7);
+      add(scores, "protection", 4);
       add(scores, "spiritual_authority", 4);
-      add(scores, "protection", 3);
-      add(scores, "reputation_growth", 3);
-    }
-
-    if (has(rahu)) {
-      add(scores, "social_media_influence", 6);
-      add(scores, "mass_attraction", 5);
-      add(scores, "taweez_symbolic_sensitivity", 5);
-      add(scores, "protection", 5);
-      add(scores, "dream_vision", 2);
+      add(scores, "practice_memory_need", 3);
     }
 
     if (rahu?.sign === "Aquarius") {
-      add(scores, "mass_attraction", 4);
-      add(scores, "social_media_influence", 5);
-      add(scores, "public_presence", 3);
+      add(scores, "social_media_influence", 7);
+      add(scores, "mass_attraction", 6);
+      add(scores, "taweez_symbolic_sensitivity", 5);
+      add(scores, "protection", 5);
+      add(scores, "field_resonance", 4);
     }
 
-    if (has(ketu)) {
+    if (ketu?.nakshatra_lord === "Ketu") {
       add(scores, "dream_vision", 4);
       add(scores, "basirah", 3);
-      add(scores, "hidden_knowledge", 4);
-      add(scores, "protection", 2);
+      add(scores, "hidden_knowledge", 5);
+      add(scores, "sacred_space", 3);
     }
 
     if (mars?.sign === "Aries") {
       add(scores, "public_presence", 2);
-      add(scores, "mass_attraction", 1);
       add(scores, "speech_control", 3);
       add(scores, "protection", 2);
+      add(scores, "overload_risk", 3);
     }
 
-    const ranked = rank(scores);
-    const strongest = ranked[0] || { gate: "silent_zikr", score: 0 };
+    const rankedGates = rank(scores);
+    const strongestGate = rankedGates[0] || { gate: "basirah", score: 0 };
 
     const innerPower =
       scores.divine_connection +
@@ -344,56 +319,73 @@ export default async function handler(req, res) {
       scores.trust_building +
       scores.reputation_growth;
 
-    const actionPower = scores.spiritual_action_permission + scores.discipline + scores.grounding;
+    const disciplinePower =
+      scores.grounding +
+      scores.discipline +
+      scores.speech_control +
+      scores.protection;
 
     const todayMode =
-      publicPower >= innerPower + 5
+      publicPower >= innerPower + 6
         ? "PUBLIC_MAGNETISM_DAY"
-        : innerPower >= publicPower + 5
+        : innerPower >= publicPower + 6
         ? "INNER_BASIRAH_DAY"
         : "INNER_POWER_PLUS_PUBLIC_CONTROL_DAY";
 
     const unlockLevel =
-      Math.max(innerPower, publicPower, actionPower) >= 55
+      Math.max(innerPower, publicPower, disciplinePower) >= 70
+        ? "DESTINY_PEAK"
+        : Math.max(innerPower, publicPower, disciplinePower) >= 55
         ? "MAXIMUM_DAY"
-        : Math.max(innerPower, publicPower, actionPower) >= 40
+        : Math.max(innerPower, publicPower, disciplinePower) >= 40
         ? "HIGH_UNLOCK_DAY"
-        : Math.max(innerPower, publicPower, actionPower) >= 25
+        : Math.max(innerPower, publicPower, disciplinePower) >= 25
         ? "BUILDING_UNLOCK_DAY"
         : "MAINTENANCE_DAY";
 
-    let practice = "silent zikr + muraqaba";
-    let zikr = "Allah / Ya Latif / Ya Basir";
-    let counts = { allah: 100, ya_latif: 129, ya_basir: 313, salawat: 100 };
+    let zikr = "Ya Latif / Ya Basir / Salawat";
+    let pronunciation = {
+      ya_latif: "ইয়া লা-তীফ",
+      ya_basir: "ইয়া বা-সীর",
+      salawat: "দরুদ শরীফ / সালাওয়াত"
+    };
+    let counts = { ya_latif: 129, ya_basir: 313, salawat: 100 };
+    let mainPractice = "silent zikr + basirah muraqaba";
 
-    if (["mass_attraction", "public_presence", "social_media_influence"].includes(strongest.gate)) {
-      practice = "public attraction discipline + salawat + clean presence";
+    if (
+      ["mass_attraction", "public_presence", "social_media_influence"].includes(
+        strongestGate.gate
+      )
+    ) {
+      mainPractice = "public attraction discipline + salawat + clean presence";
       zikr = "Ya Wadud / Ya Aziz / Salawat";
+      pronunciation = {
+        ya_wadud: "ইয়া ওয়া-দুদ",
+        ya_aziz: "ইয়া আ-জীজ",
+        salawat: "দরুদ শরীফ / সালাওয়াত"
+      };
       counts = { ya_wadud: 100, ya_aziz: 94, salawat: 100, ya_latif: 129 };
     }
 
-    if (["client_reading_power", "prediction_intuition", "basirah"].includes(strongest.gate)) {
-      practice = "basirah muraqaba + client-reading silence + speech control";
-      zikr = "Ya Basir / Ya Latif / Allah";
-      counts = { ya_basir: 313, ya_latif: 129, allah: 100, salawat: 100 };
-    }
-
-    if (strongest.gate === "dream_vision" || lunarPhase === "FULL_MOON_FIELD") {
-      practice = "night muraqaba + dream journal + silent zikr";
-      zikr = "Ya Nur / Ya Basir / Allah";
-      counts = { ya_nur: 256, ya_basir: 313, allah: 100, salawat: 100 };
-    }
-
-    if (strongest.gate === "taweez_symbolic_sensitivity") {
-      practice = "symbolic anchor + protection zikr + clean intention";
+    if (strongestGate.gate === "protection") {
+      mainPractice = "protection zikr + grounding + clean silence";
       zikr = "Hasbunallahu wa ni'mal wakeel / Ya Hafiz";
-      counts = { hasbunallah: 33, ya_hafiz: 99, ayatul_kursi: 1, salawat: 33 };
+      pronunciation = {
+        hasbunallah: "হাসবুনাল্লাহু ওয়া নি‘মাল ওয়াকীল",
+        ya_hafiz: "ইয়া হা-ফীজ"
+      };
+      counts = { hasbunallah: 33, ya_hafiz: 99, ayatul_kursi: 1 };
     }
 
-    if (strongest.gate === "rizq_alignment") {
-      practice = "rizq cleaning + gratitude + salawat discipline";
-      zikr = "Ya Fattah / Ya Razzaq";
-      counts = { ya_fattah: 129, ya_razzaq: 100, salawat: 100 };
+    if (strongestGate.gate === "dream_vision") {
+      mainPractice = "night muraqaba + dream journal + silent zikr";
+      zikr = "Ya Nur / Ya Basir / Allah";
+      pronunciation = {
+        ya_nur: "ইয়া নূর",
+        ya_basir: "ইয়া বা-সীর",
+        allah: "আল্লাহ"
+      };
+      counts = { ya_nur: 256, ya_basir: 313, allah: 100, salawat: 100 };
     }
 
     const innerWindowUK =
@@ -404,135 +396,151 @@ export default async function handler(req, res) {
         : "22:40-23:20";
 
     const publicWindowUK =
-      scores.public_presence >= 8 || scores.social_media_influence >= 8
+      scores.social_media_influence >= 8 || scores.public_presence >= 8
         ? "11:30-14:30"
         : scores.voice_magnetism >= 7
         ? "18:30-20:30"
         : "12:00-14:00";
 
+    const tahajjudWindowUK =
+      scores.tahajjud_gate >= 5 || scores.dream_vision >= 8
+        ? "02:45-04:15"
+        : "03:00-04:00";
+
     const dreamWindowUK =
-      lunarPhase === "FULL_MOON_FIELD" || scores.dream_vision >= 7
-        ? "23:30-01:20"
-        : "22:50-23:30";
+      scores.dream_vision >= 7 ? "23:30-01:20" : "22:50-23:30";
 
     const avoidWindowUK =
-      scores.speech_control >= 7 || mars?.sign === "Aries"
+      scores.speech_control >= 7 || scores.overload_risk >= 4
         ? "16:00-19:00"
         : "19:30-21:00";
 
-    const permissionGate = {
-      divine_connection: status(scores.divine_connection),
-      basirah: status(scores.basirah),
-      dream_vision: status(scores.dream_vision),
-      prediction_intuition: status(scores.prediction_intuition),
-      client_reading_power: status(scores.client_reading_power),
-      remedy_crafting: status(scores.remedy_crafting),
-      taweez_symbolic_sensitivity: status(scores.taweez_symbolic_sensitivity),
-      mass_attraction: status(scores.mass_attraction),
-      public_presence: status(scores.public_presence),
-      voice_magnetism: status(scores.voice_magnetism),
-      social_media_influence: status(scores.social_media_influence),
-      trust_building: status(scores.trust_building),
-      reputation_growth: status(scores.reputation_growth),
-      protection: status(scores.protection),
-      lunar_power: status(scores.lunar_power),
-      spiritual_action_permission: status(scores.spiritual_action_permission)
-    };
+    const permissionGate = {};
+    for (const [k, v] of Object.entries(scores)) permissionGate[k] = permission(v);
 
-    const publicAction =
-      todayMode === "PUBLIC_MAGNETISM_DAY"
-        ? {
-            action: "Post, voice note, client-facing content, public reading",
-            style: "calm authority, short words, no overclaim, one strong message",
-            rule: "Inner intention first, public action second"
-          }
-        : todayMode === "INNER_POWER_PLUS_PUBLIC_CONTROL_DAY"
-        ? {
-            action: "Light public presence after inner practice",
-            style: "one controlled post or one client-reading message",
-            rule: "Silence charges the field before visibility"
-          }
-        : {
-            action: "Prepare privately, no major public push",
-            style: "observe, write, refine method",
-            rule: "Inner battery above outer display"
-          };
-
-    const avoid = [
-      mercury?.combust ? "fast reply, argument, careless speech" : null,
-      scores.protection >= 5 ? "fear-based ritual chasing or over-force activation" : null,
-      mars?.sign === "Aries" ? "anger reaction, ego clash, sudden decision" : null,
-      lunarPhase === "DARKENING_PURIFICATION_FIELD" ? "heavy emotional decision at night" : null,
-      "claiming vision as certainty without repeated confirmation",
-      "mixing too many practices in one night"
-    ].filter(Boolean);
-
-    const food = {
-      recommended: [
+    const foodMaterialEngine = {
+      recommended_food: [
         "light warm food",
         "simple clean water",
         "milk/honey softness if suitable",
         "avoid heavy stomach before practice"
       ],
-      avoid: [
+      avoid_food: [
         "excess caffeine",
         "heavy late-night spicy food",
         "overeating",
-        "practice after emotional argument"
-      ]
+        "practice immediately after emotional argument"
+      ],
+      material_support:
+        permissionGate.taweez_symbolic_sensitivity === "OPEN" ||
+        permissionGate.taweez_symbolic_sensitivity === "WIDE_OPEN"
+          ? {
+              allowed: true,
+              material: "clean white paper",
+              method: "one intention word only, folded near practice place",
+              duration: "1 night or 3 nights maximum",
+              disposal: "burn safely or place respectfully away; do not obsess"
+            }
+          : {
+              allowed: false,
+              method: "silent zikr only; no object anchor today"
+            },
+      colour_field:
+        todayMode === "PUBLIC_MAGNETISM_DAY"
+          ? "clean white / soft green / simple dark formal"
+          : "white / light neutral / low visual noise",
+      scent_space:
+        scores.sacred_space >= 4
+          ? "clean room, low light, mild scent if suitable"
+          : "simple clean air"
+    };
+
+    const namazEngine = {
+      enhancement:
+        lunarField === "FULL_MOON_FIELD"
+          ? "Tahajjud + long sujood + dream journal"
+          : lunarField === "NEW_MOON_FIELD"
+          ? "Post-Isha silence + protection dua + grounding"
+          : "Post-Isha muraqaba",
+      nafl_suggestion:
+        scores.divine_connection >= 8
+          ? "2 rakaat nafl before main zikr if energy allows"
+          : "Keep farz steady; add short silent sitting only",
+      tahajjud_window: windowUK(tahajjudWindowUK),
+      rule: "No force. If tired, choose short sincere practice over long unstable practice."
+    };
+
+    const dreamVisionEngine = {
+      status: permissionGate.dream_vision,
+      dream_window: windowUK(dreamWindowUK),
+      protocol:
+        "Before sleep: short zikr, ask for clarity without force. After waking: write dream fragments, names, colours, symbols, first emotion.",
+      validation:
+        "A signal is not final truth unless it repeats, stays calm, and proves useful in real life."
+    };
+
+    const publicEngine = {
+      status: todayMode,
+      public_window: windowUK(publicWindowUK),
+      action:
+        todayMode === "PUBLIC_MAGNETISM_DAY"
+          ? "post / voice note / client-facing guidance / authority message"
+          : todayMode === "INNER_POWER_PLUS_PUBLIC_CONTROL_DAY"
+          ? "one controlled public action after inner practice"
+          : "prepare privately; no major public push",
+      style:
+        "short, calm, confident, no overclaim, one clean message",
+      warning:
+        "Ego heat, fast reply and over-explanation weaken the field."
+    };
+
+    const memoryValidationEngine = {
+      practice_memory_fields: [
+        "date",
+        "practice",
+        "count",
+        "time",
+        "feeling_before",
+        "feeling_after",
+        "dream",
+        "public_response",
+        "accuracy_result"
+      ],
+      validation_rule:
+        "Track what happened after each practice. Repeat what works. Reduce what overloads.",
+      accuracy_rule:
+        "Prediction quality grows through observation, verification and humility."
     };
 
     const formula = {
       today_mode: todayMode,
       unlock_level: unlockLevel,
-      strongest_gate: strongest,
-      lunar_phase_field: lunarPhase,
-      activation_level: level(strongest.score),
-      practice,
+      strongest_gate: strongestGate,
+      lunar_phase_field: lunarField,
+      activation_level: level(strongestGate.score),
+      main_practice: mainPractice,
       zikr,
+      bengali_pronunciation: pronunciation,
       counts,
       inner_practice_window: windowUK(innerWindowUK),
       public_action_window: windowUK(publicWindowUK),
+      tahajjud_window: windowUK(tahajjudWindowUK),
       dream_observation_window: windowUK(dreamWindowUK),
       avoid_window: windowUK(avoidWindowUK),
-      duration: "20-40 minutes. Do not force trance. Stop if agitation increases.",
-      before_practice: "Wash hands/face, reduce phone/light, sit still, make silent intention.",
-      public_action_protocol: publicAction,
-      dream_protocol:
-        "After practice write date, dream fragments, names, colours, symbols, first waking emotion.",
-      remedy_crafting_rule:
-        "Create remedy only after calm repetition and repeated signal. No fear-based taweez.",
-      symbolic_anchor:
-        permissionGate.taweez_symbolic_sensitivity === "OPEN" ||
-        permissionGate.taweez_symbolic_sensitivity === "WIDE_OPEN"
-          ? "Clean white paper, one intention word, folded near practice place. No overuse."
-          : "No strong symbol today; use silent zikr.",
-      safety_lock:
-        "No guaranteed vision claim. Treat signs as training unless repeated, calm, useful and grounded."
-    };
-
-    const interpretation = {
-      destiny_meaning:
-        "This engine aligns Royel’s inner silence with public spiritual influence. The aim is not hidden isolation only; it is disciplined basirah expressed with clean authority.",
-      today_meaning:
-        todayMode === "PUBLIC_MAGNETISM_DAY"
-          ? "Today supports public pull, voice presence and attraction, but speech must stay clean."
-          : todayMode === "INNER_BASIRAH_DAY"
-          ? "Today supports inner seeing, dream signal, basirah and remedy design more than public push."
-          : "Today supports both inner spiritual sharpening and controlled public presence.",
+      duration: "20-40 minutes. Stop if agitation increases.",
       expected_internal_effect:
-        "calmer mind, sharper observation, reduced scattered speech, stronger symbolic sensitivity.",
+        "calmer mind, sharper observation, cleaner speech, stronger symbolic sensitivity.",
       expected_external_effect:
-        "better client reading tone, stronger public presence, cleaner timing sense, controlled influence.",
-      warning:
-        "Do not chase signs. Verify through calmness, accuracy, usefulness and repetition."
+        "better public presence, cleaner client reading tone, stronger trust response.",
+      destroys_effect:
+        "anger, overclaim, fear-based ritual chasing, too many practices, careless speech."
     };
 
     return res.status(200).json({
       engine_status: ENGINE_STATUS,
       system_status: "OK",
-      mode: "ROYEL_ONLY_MAX_DESTINY_ALIGNMENT",
-      subject_lock: ROYEL,
+      mode: "ROYEL_ONLY_V10_FULL_FINAL_DESTINY_ALIGNMENT",
+      subject_lock: PROFILE,
       current_time_utc: now.toISOString(),
 
       backend_integration: {
@@ -545,7 +553,7 @@ export default async function handler(req, res) {
       live_sky_extract: {
         weekday: panchanga?.weekday || null,
         tithi: panchanga?.tithi || null,
-        lunar_phase_field: lunarPhase,
+        lunar_phase_field: lunarField,
         moon,
         sun,
         mercury,
@@ -561,35 +569,52 @@ export default async function handler(req, res) {
         dominant_trigger: dominantTrigger,
         micro_status: transitData?.micro_status || null,
         micro_convergence: transitData?.micro_convergence || null,
-        micro_dominant_trigger: micro,
-        oracle_classification: oracleClassification
+        micro_dominant_trigger: transitData?.micro_dominant_trigger || null
       },
 
       max_destiny_matrix: {
         inner_power_score: innerPower,
         public_power_score: publicPower,
-        action_power_score: actionPower,
+        discipline_power_score: disciplinePower,
         today_mode: todayMode,
         unlock_level: unlockLevel,
-        ranked_gates: ranked,
+        ranked_gates: rankedGates,
         permission_gate: permissionGate
       },
 
       today_spiritual_formula: formula,
-      avoid_today: avoid,
-      food_guidance: food,
-      interpretation_seed: interpretation,
+      food_material_engine: foodMaterialEngine,
+      namaz_engine: namazEngine,
+      dream_vision_engine: dreamVisionEngine,
+      public_influence_engine: publicEngine,
+      memory_validation_engine: memoryValidationEngine,
+
+      safety_lock: {
+        no_guaranteed_vision_claim: true,
+        no_fear_based_occultism: true,
+        no_forced_activation: true,
+        no_superiority_claim: true,
+        no_sleep_damage: true,
+        no_random_ritual_mixing: true
+      },
+
+      destiny_unlock_direction: {
+        core:
+          "inner silence + public influence + basirah + clean speech + validation",
+        strongest_path:
+          "recognisable spiritual guidance with public magnetic authority",
+        final_rule:
+          "Silence charges the field. Clean speech protects it. Public action expresses it. Validation stabilises it."
+      },
 
       guidance_status:
-        "MAX DESTINY BACKEND ACTIVE: lunar phase, public magnetism, basirah, dream, remedy craft, protection, timing and spiritual action permission integrated.",
-      next_build_step:
-        "Test JSON, then update OpenAPI schema if needed and create final GPT instruction layer."
+        "V10 FULL FINAL BACKEND ACTIVE: basirah, public magnetism, lunar phase, namaz, food, material, dream, remedy, memory and validation integrated."
     });
   } catch (error) {
     return res.status(500).json({
-      engine_status: "ROYEL_SPIRITUAL_ALIGNMENT_ENGINE_V5_MAX_DESTINY",
+      engine_status: "ROYEL_SPIRITUAL_ALIGNMENT_ENGINE_V10_FULL_FINAL",
       system_status: "FAILED",
-      error: error?.message || "unknown max destiny spiritual engine error"
+      error: error?.message || "unknown V10 spiritual engine error"
     });
   }
 }
